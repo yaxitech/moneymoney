@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node bundle.js",
+    "deploy": "npm run build && cp YAXI.lua \"$HOME/Library/Containers/com.moneymoney-app.retail/Data/Library/Application Support/MoneyMoney/Extensions/\""
+  },
+  "dependencies": {
+    "luabundle": "^1.7.0"
+  }
+}

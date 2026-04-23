@@ -1,0 +1,78 @@
+name: CI
+
+permissions: {}
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@v3
+        with:
+          diagnostic-endpoint: ""
+          summarize: false
+
+      - name: nix flake check
+        run: nix flake check -L
+
+      - name: busted test suite (bundled)
+        env:
+          YAXI_API_KEY_ID: test
+          YAXI_API_KEY_SECRET: ${{ secrets.YAXI_API_KEY_SECRET }}
+        run: |
+          nix build -L .#bundle
+          cp ./result/YAXI.lua bundler/
+          nix develop -c busted --run=bundled --output=junit > test-results.xml
+
+      - name: Report test results
+        uses: dorny/test-reporter@v3
+        if: always()
+        with:
+          name: Busted Tests
+          path: test-results.xml
+          reporter: java-junit
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: yaxi-bundled
+          path: result/*
+
+  release:
+    if: github.event_name == 'release'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Download bundle artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: yaxi-bundled
+
+      - name: Upload bundle to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip yaxi.zip YAXI.lua yaxi-config.json
+          gh release upload "${{ github.event.release.tag_name }}" yaxi.zip

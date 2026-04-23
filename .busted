@@ -1,0 +1,18 @@
+return {
+  default = {
+    ROOT = { "tests" },
+    pattern = "_spec",
+    helper = "tests/init.lua",
+  },
+  offline = {
+    ROOT = { "tests" },
+    pattern = "_spec",
+    ["exclude-tags"] = "online",
+    helper = "tests/mm_env.lua",
+  },
+  bundled = {
+    ROOT = { "tests" },
+    pattern = "_spec",
+    helper = "tests/init_bundled.lua",
+  },
+}

@@ -1,0 +1,9 @@
+[submodule "yaxi/routex-client-lua"]
+	path = yaxi/routex-client-lua
+	url = https://github.com/yaxitech/routex-client-lua
+[submodule "addons/luassert"]
+	path = addons/luassert
+	url = https://github.com/LuaCATS/luassert
+[submodule "addons/busted"]
+	path = addons/busted
+	url = https://github.com/LuaCATS/busted
