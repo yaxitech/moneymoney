@@ -26,18 +26,31 @@ context("yaxi.traces", function()
     end)
 
     test("prefers YAXI.lua over yaxi.lua", function()
-      local dir = os.tmpname()
-      os.remove(dir)
-      os.execute(string.format("mkdir -p %q", dir))
-      for _, name in ipairs({ "YAXI.lua", "yaxi.lua" }) do
-        local f = io.open(dir .. "/" .. name, "w")
-        f:write(name) ---@diagnostic disable-line: need-check-nil
-        f:close() ---@diagnostic disable-line: need-check-nil
+      -- Mock io.open: case-insensitive filesystems (macOS APFS) collapse
+      -- the two filenames, so real files cannot exercise the preference.
+      local realOpen = io.open
+      local tried = {}
+      io.open = function(path)
+        table.insert(tried, path)
+        if path:match("YAXI%.lua$") then
+          return {
+            read = function()
+              return "upper"
+            end,
+            close = function() end,
+          }
+        end
+        return nil
       end
 
-      assert.are_equal(MM.sha256("YAXI.lua"), traces.hashExtensionFile(dir))
+      local ok, digest = pcall(traces.hashExtensionFile, "/fake/dir")
+      io.open = realOpen
+      if not ok then
+        error(digest)
+      end
 
-      os.execute(string.format("rm -rf %q", dir))
+      assert.are_equal(MM.sha256("upper"), digest)
+      assert.are_equal("/fake/dir/YAXI.lua", tried[1])
     end)
 
     test("returns nil when no extension file exists", function()
