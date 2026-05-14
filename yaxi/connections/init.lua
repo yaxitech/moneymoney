@@ -255,6 +255,7 @@ local BANKS = {
   require("yaxi.connections.gls"),
   require("yaxi.connections.ing"),
   -- require("yaxi.connections.kontist"),
+  require("yaxi.connections.postbank"),
   require("yaxi.connections.n26"),
 }
 

@@ -18,6 +18,7 @@ The extension currently has built-in support for the following banks:
     <td align="center"><img src=".github/logos/dkb.svg" alt="DKB" width="40" height="40"><br><sub>DKB</sub></td>
     <td align="center"><img src=".github/logos/ing.svg" alt="ING" width="40" height="40"><br><sub>ING</sub></td>
     <td align="center"><img src=".github/logos/n26.svg" alt="N26" width="40" height="40"><br><sub>N26</sub></td>
+    <td align="center"><img src=".github/logos/post.svg" alt="N26" width="40" height="40"><br><sub>Postbank</sub></td>
   </tr>
 </table>
 

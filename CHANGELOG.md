@@ -2,6 +2,10 @@
 
 ## [0.2] - 2026-05-15
 
+### Added
+
+- Support for Postbank
+
 ### Fixed
 
 - Each account's supported `paymentTypes` (e.g. SEPA transfer, instant transfer) are now populated correctly.
