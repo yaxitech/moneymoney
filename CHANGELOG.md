@@ -13,7 +13,8 @@
   Existing accounts pick up the fix on the next refresh.
 - For banks without native Verification of Payee, the warning prompting the user to verify the recipient now appears before the transfer is sent to the bank.
   Previously it was shown after the transfer had already been registered, leaving no clean way to abort.
-- Fix BIC-based connection info matching.
+- TAN method lookup now also matches accounts by their bank code, not just BIC.
+  Previously, accounts MoneyMoney delivers without an explicit BIC could fail with "No connection found".
 
 ## [0.1] - 2026-04-24
 
