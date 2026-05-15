@@ -55,13 +55,13 @@ return {
         -- Split `"Name | Medium"` format
         local parts = util.split(tanMethod.name, "|")
         if #parts == 2 then
-          tanMethod.name = util.strip(parts[1]) ---@diagnostic disable-line: assign-type-mismatch
+          tanMethod.name = util.strip(parts[1])
           tanMethod.mediumName = util.strip(parts[2])
         end
 
-        local nameLower = tanMethod.name:lower()
+        local nameLower = (tanMethod.name --[[@as string]]):lower()
         if nameLower:find("seal") then
-          tanMethod.name = MM.localizeText("DKB App") ---@diagnostic disable-line: assign-type-mismatch
+          tanMethod.name = MM.localizeText("DKB App")
           if tanMethod.mediumName then
             tanMethod.mediumName = tanMethod.mediumName:gsub("^.+ auf (.*)", "%1")
           end
@@ -78,7 +78,7 @@ return {
             tanMethod.name = "chipTAN QR"
             tanMethod.hbciMethod = "913"
           elseif nameLower:find("usb") or nameLower:find("bluetooth") then
-            tanMethod.name = "chipTAN USB / Bluetooth" ---@diagnostic disable-line: assign-type-mismatch
+            tanMethod.name = "chipTAN USB / Bluetooth"
             tanMethod.hbciMethod = "912"
           elseif nameLower:find("optisch") or nameLower:find("flicker") then
             tanMethod.name = "chipTAN optisch"

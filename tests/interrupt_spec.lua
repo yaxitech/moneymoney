@@ -7,10 +7,7 @@ local assert = require("luassert") ---@type luassert
 
 local Connection = require("yaxi.connections")
 local Session = require("yaxi.session")
-local enum = require("yaxi.enum")
 local interrupt = require("yaxi.interrupt")
-
-local VopMode = enum.VopMode
 
 local rc = require("routex-client")
 local Result = rc.Result
@@ -328,29 +325,6 @@ context("yaxi.interrupt", function()
       assert.are_equal("pending", res.status)
       assert.is_true(res.poll)
       assert.are_equal("Name mismatch: Max Mustermann vs. Erika Musterfrau", res.vop)
-    end)
-
-    test("injects VoP warning for banks without VoP support", function()
-      local session = mockSession({ vop = VopMode.None })
-      local dialog = mockConfirmationDialog("Confirm payment", DialogContext.Sca)
-      local res = interrupt.mapToPaymentResponse(session, dialog, nil, false)
-      assert.is_not_nil(res.vop)
-      ---@cast res.vop -nil
-      assert.is_truthy(res.vop:find("Verification of Payee"))
-    end)
-
-    test("suppresses VoP warning when suppressVopWarning is true", function()
-      local session = mockSession({ vop = VopMode.None })
-      local dialog = mockConfirmationDialog("Confirm payment", DialogContext.Sca)
-      local res = interrupt.mapToPaymentResponse(session, dialog, nil, true)
-      assert.is_nil(res.vop)
-    end)
-
-    test("no VoP warning for banks with decoupled VoP", function()
-      local session = mockSession({ vop = VopMode.Decoupled })
-      local dialog = mockConfirmationDialog("Confirm payment", DialogContext.Sca)
-      local res = interrupt.mapToPaymentResponse(session, dialog, nil, false)
-      assert.is_nil(res.vop)
     end)
   end)
 end)

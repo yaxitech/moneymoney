@@ -11,7 +11,7 @@
 -- Methods using `_self` (dot-call) ignore self in their default implementation
 -- but may be overridden by config callbacks that do use it (e.g. `mapAccount`).
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 local rc = require("routex-client")
 local PaymentProduct = rc.PaymentProduct
 
@@ -73,7 +73,7 @@ function Connection.mapTanMethods(_self, options)
   for _, opt in ipairs(options) do
     ---@type MM.TanMethod
     local method = {
-      name = opt.label, ---@diagnostic disable-line: assign-type-mismatch
+      name = opt.label,
       webMethod = opt.key,
       mediumName = opt.explanation,
     }

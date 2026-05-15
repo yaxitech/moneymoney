@@ -1,8 +1,6 @@
 -- SPDX-License-Identifier: MIT
 -- Author: Vincent Haupert <vincent.haupert@yaxi.tech>
 
----@diagnostic disable: undefined-global, param-type-mismatch
-
 dofile("tests/mm_env.lua")
 
 local assert = require("luassert")
@@ -26,10 +24,11 @@ extension.setup({ apiKeyId = "test", apiKeySecret = "dGVzdA==" })
 local function mockSession(sessionType)
   local sess = setmetatable({}, Session)
   sess.sessionType = sessionType
+  ---@diagnostic disable-next-line: missing-fields
   sess.connection = {
     paymentTypes = { PaymentTypeTransfer },
-  }
-  sess.credentials = { connectionId = "mock" }
+  } --[[@as YAXI.MoneyMoney.Connection]]
+  sess.credentials = { connectionId = "mock" } --[[@as YAXI.RoutexClient.Credentials]]
   sess.balancesCache = { [TEST_IBAN] = { balance = 42 } }
   sess.transactionsCache = nil
   sess.result = nil
@@ -51,6 +50,7 @@ end
 local function initWithMockSession(sessionType)
   local origNew = Session.new
   local injected
+  ---@diagnostic disable-next-line: duplicate-set-field, redundant-parameter
   Session.new = function(_cls, conn, _apiKeyId, _apiKeySecret, _version)
     injected = mockSession(sessionType)
     injected.connection = conn
@@ -58,7 +58,8 @@ local function initWithMockSession(sessionType)
     injected.balancesCache = { [TEST_IBAN] = { balance = 42 } }
     return injected
   end
-  InitializeSession2("Web Banking", "YAXI Demo", 1, { "", "" }, true, {}, sessionType)
+  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" } --[[@as MM.Credentials]], true, {}, sessionType)
+  ---@diagnostic disable-next-line: duplicate-set-field
   Session.new = origNew
   return injected
 end
@@ -77,7 +78,10 @@ local function stubServiceCalls()
   service.callTransactions = function(_sess, _iban, _currency, since)
     table.insert(captured, since)
     -- Simulate a completed Result so the caching path runs
-    _sess.result = { jwt = "mock" }
+    ---@diagnostic disable-next-line: missing-fields
+    local mockResult = { jwt = "mock" } --[[@as YAXI.RoutexClient.Result]]
+    _sess.result = mockResult
+    return mockResult
   end
   interrupt.mapToChallenge = function(_sess, _obResponse)
     return nil

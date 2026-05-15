@@ -28,9 +28,12 @@ dst:write(source)
 dst:close()
 
 -- Write a config file next to the bundle.
+-- `suppressVopWarning = true` mirrors `tests/init.lua` so SubmitPayment tests
+-- exercise the bank-side flow directly without the pre-`callTransfer` VoP warning.
 local config = vendorJson.encode({
   apiKeyId = apiKeyId,
   apiKeySecret = apiKeySecret,
+  suppressVopWarning = true,
 })
 local cf = assert(io.open(extDir .. "/yaxi-config.json", "w"))
 cf:write(config)

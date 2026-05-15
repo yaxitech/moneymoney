@@ -151,6 +151,12 @@ end
 ---@param _params MM.WebBankingParams
 WebBanking = function(_params) end
 
+---@param _bankCode string
+---@return MM.BankInfoResult?
+BankInfo = function(_bankCode)
+  return nil
+end
+
 --endregion Global constructor functions
 
 --region Connection mock

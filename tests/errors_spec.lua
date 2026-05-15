@@ -5,6 +5,7 @@
 dofile("tests/mm_env.lua")
 
 local assert = require("luassert")
+local enum = require("yaxi.enum")
 local errors = require("yaxi.errors")
 
 local rc = require("routex-client")
@@ -63,7 +64,8 @@ context("yaxi.errors", function()
     test("clears connectionData for UnauthorizedError", function()
       local conn = { id = "test-conn", service = "TestBank" }
       LocalStorage["test-conn"] = "stale-data" --[[@as any]]
-      local session = { connection = conn, activeService = nil, activeTicket = nil }
+      ---@diagnostic disable-next-line: missing-fields
+      local session = { connection = conn, activeService = nil, activeTicket = nil } --[[@as YAXI.MoneyMoney.Session]]
 
       local err = setmetatable({}, UnauthorizedError)
       err.name = "UnauthorizedError"
@@ -76,7 +78,8 @@ context("yaxi.errors", function()
     test("clears connectionData for ConsentExpiredError", function()
       local conn = { id = "test-conn-2", service = "TestBank2" }
       LocalStorage["test-conn-2"] = "stale-consent" --[[@as any]]
-      local session = { connection = conn, activeService = nil, activeTicket = nil }
+      ---@diagnostic disable-next-line: missing-fields
+      local session = { connection = conn, activeService = nil, activeTicket = nil } --[[@as YAXI.MoneyMoney.Session]]
 
       local err = setmetatable({}, ConsentExpiredError)
       err.name = "ConsentExpiredError"
@@ -118,7 +121,8 @@ context("yaxi.errors", function()
         errorWriteCalled = true
       end
 
-      local session = { activeService = "test", activeTicket = "ticket" }
+      ---@diagnostic disable-next-line: missing-fields
+      local session = { activeService = enum.Service.Accounts, activeTicket = "ticket" } --[[@as YAXI.MoneyMoney.Session]]
       errors.protected(session, function()
         local err = setmetatable({}, RCError)
         err.name = "TestError"

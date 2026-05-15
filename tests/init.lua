@@ -9,6 +9,9 @@ local extension = require("yaxi.extension")
 extension.setup({
   apiKeyId = requireEnv("YAXI_API_KEY_ID"),
   apiKeySecret = requireEnv("YAXI_API_KEY_SECRET"),
+  -- The pre-`callTransfer` VoP warning has its own focused test; bypass it in e2e
+  -- tests so SubmitPayment flows can be exercised without an extra confirmation step.
+  suppressVopWarning = true,
 })
 
 -- Minimize API requests to stay within rate limits (150 req/60s):

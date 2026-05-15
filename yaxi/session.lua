@@ -5,7 +5,7 @@
 
 ---The `binary` alias is defined in `routex-client/result-types.lua`.
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 
 local rc = require("routex-client")
 local RoutexClient = rc.RoutexClient
@@ -42,6 +42,7 @@ local MMHttpClient = require("yaxi.mm.http").MMHttpClient
 ---@field balancesCache YAXI.MoneyMoney.Session.BalancesCache? Decoded balances keyed by IBAN
 ---@field transactionsCache YAXI.MoneyMoney.Session.TransactionsCache? Decoded transactions keyed by IBAN
 ---@field sessionType MM.SessionType? MoneyMoney session type (e.g. `"refresh"`, `"new account"`)
+---@field pendingVopWarning boolean? Set while a synthetic VoP warning is awaiting user confirmation in `SubmitPayment`
 local Session = {}
 Session.__index = Session
 
@@ -106,11 +107,12 @@ function Session:routexSession()
   return (self.result and self.result.session) or self.savedSession
 end
 
----Reset interrupt state (`dialog`, `redirect`, `result`).
+---Reset interrupt state (`dialog`, `redirect`, `result`, `pendingVopWarning`).
 function Session:resetInterruptState()
   self.dialog = nil
   self.redirect = nil
   self.result = nil
+  self.pendingVopWarning = nil
 end
 
 ---Classify and store an `OBResponse` into the appropriate state field
@@ -120,17 +122,20 @@ function Session:storeResponse(obResponse)
   self:resetInterruptState()
 
   if obResponse:isInstanceOf(Result) then
-    self.result = obResponse --[[@as YAXI.RoutexClient.Result]]
+    ---@cast obResponse YAXI.RoutexClient.Result
+    self.result = obResponse
     log:debug("Received Result for %s", self.activeService or "unknown")
-    if self.result.connectionData then
-      self.credentials.connectionData = self.result.connectionData
+    if obResponse.connectionData then
+      self.credentials.connectionData = obResponse.connectionData
     end
-    self.savedSession = self.result.session
+    self.savedSession = obResponse.session
   elseif obResponse:isInstanceOf(Dialog) then
-    self.dialog = obResponse --[[@as YAXI.RoutexClient.Dialog]]
+    ---@cast obResponse YAXI.RoutexClient.Dialog
+    self.dialog = obResponse
     log:debug("Received Dialog for %s", self.activeService or "unknown")
   elseif obResponse:isInstanceOf(Redirect) then
-    self.redirect = obResponse --[[@as YAXI.RoutexClient.Redirect]]
+    ---@cast obResponse YAXI.RoutexClient.Redirect
+    self.redirect = obResponse
     log:debug("Received Redirect for %s", self.activeService or "unknown")
   elseif obResponse:isInstanceOf(RedirectHandle) then
     error("Received RedirectHandle but expected Redirect. Ensure a redirect URI is configured.")

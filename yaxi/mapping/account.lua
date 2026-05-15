@@ -3,7 +3,7 @@
 
 -- YAXI Account Mapper — YAXI account → `MM.Account`
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 
 local M = {}
 
@@ -20,6 +20,27 @@ local typeMap = {
   Commerce = AccountTypeOther,
   Rewards = AccountTypeOther,
 }
+
+---Derive supported payment types for a YAXI account from its capabilities.
+---Returns the connection defaults when capabilities are absent or when
+---`SinglePayment` is present; returns `nil` otherwise.
+---@param yaxiAccount YAXI.RoutexClient.Result.Account?
+---@param connection YAXI.MoneyMoney.Connection
+---@return MM.PaymentTypeConst[]?
+function M.derivePaymentTypes(yaxiAccount, connection)
+  if not yaxiAccount then
+    return nil
+  end
+  if not yaxiAccount.capabilities then
+    return connection.paymentTypes
+  end
+  for _, cap in ipairs(yaxiAccount.capabilities) do
+    if cap == "SinglePayment" then
+      return connection.paymentTypes
+    end
+  end
+  return nil
+end
 
 ---Map a YAXI account to an `MM.Account`.
 ---@param yaxiAccount YAXI.RoutexClient.Result.Account
@@ -47,25 +68,6 @@ function M.mapAccount(yaxiAccount, connection)
 
   if account.type == AccountTypePortfolio then
     account.portfolio = true
-  end
-
-  -- Determine `paymentTypes` from `capabilities`
-  if yaxiAccount.capabilities then
-    local hasSinglePayment = false
-    for _, cap in ipairs(yaxiAccount.capabilities) do
-      if cap == "SinglePayment" then
-        hasSinglePayment = true
-        break
-      end
-    end
-    if hasSinglePayment then
-      ---@diagnostic disable-next-line: inject-field
-      account.paymentTypes = connection.paymentTypes
-    end
-  else
-    -- No capabilities info: fall back to connection defaults
-    ---@diagnostic disable-next-line: inject-field
-    account.paymentTypes = connection.paymentTypes
   end
 
   return account

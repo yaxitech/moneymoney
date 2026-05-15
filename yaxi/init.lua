@@ -26,7 +26,7 @@ local function extensionsDir()
 end
 
 ---Read and parse `yaxi-config.json` from the Extensions directory.
----@param log { error: fun(self: any, fmt: string, ...: any) }
+---@param log lualogging.Logger
 ---@return { apiKeyId: string?, apiKeySecret: string?, logLevel: string?, suppressVopWarning: boolean? }
 local function loadConfig(log)
   local dir = extensionsDir()
@@ -49,16 +49,16 @@ local function loadConfig(log)
 end
 
 local function setupLogging()
-  local logging = require("routex-client.logging")
+  local logging = require("routex-client.logging") --[[@as lualogging]]
   local mmLogger = require("yaxi.mm.logger")({ prefix = "YAXI " })
   logging.defaultLogger(mmLogger)
 end
 
 setupLogging()
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 local config = loadConfig(log)
-log:setLevel(config.logLevel or "INFO")
+log:setLevel((config.logLevel or "INFO") --[[@as lualogging.Level]])
 
 local extension = require("yaxi.extension")
 extension.setup({

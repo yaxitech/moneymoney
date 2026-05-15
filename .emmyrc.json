@@ -25,11 +25,12 @@
     }
   },
   "workspace": {
-    "workspaceRoots": [".", "yaxi", "tests"],
+    "workspaceRoots": ["."],
     "library": [
       "addons/moneymoney/library",
       "addons/busted/library",
       "addons/luassert/library",
+      "addons/lualogging/library",
       "yaxi/routex-client-lua"
     ],
     "ignoreDir": [

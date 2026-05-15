@@ -36,12 +36,12 @@ return {
     if challenge.tanMethods then
       for _, tanMethod in ipairs(challenge.tanMethods) do
         if tanMethod.name == "NL58YAXI1234567890" then
-          tanMethod.name = "appTAN" ---@diagnostic disable-line: assign-type-mismatch
+          tanMethod.name = "appTAN"
           tanMethod.hbciMethod = "900"
           tanMethod.mediumName = tanMethod.name
           tanMethod.isPreferred = true
         elseif tanMethod.name == "NL31YAXI1234567891" then
-          tanMethod.name = "smsTAN" ---@diagnostic disable-line: assign-type-mismatch
+          tanMethod.name = "smsTAN"
           tanMethod.hbciMethod = "901"
           tanMethod.mediumName = tanMethod.name
         end

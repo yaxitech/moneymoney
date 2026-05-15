@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: MIT
 -- Author: Vincent Haupert <vincent.haupert@yaxi.tech>
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 
 local manifest = require("yaxi.manifest")
 
@@ -9,15 +9,22 @@ local base64 = require("routex-client.util.base64")
 
 local Connection = require("yaxi.connections")
 local Session = require("yaxi.session")
+local accountMapping = require("yaxi.mapping.account")
 local enum = require("yaxi.enum")
 local util = require("yaxi.util")
 
 local Phase = enum.Phase
 local StorageKey = enum.StorageKey
+local VopMode = enum.VopMode
 ---Maximum number of days that `RefreshAccount` may look back beyond the last
 ---successful refresh. If `since` is older than `lastRefresh - LAST_REFRESH_MAX_AGE_DAYS`,
 ---it is clamped to `today - LAST_REFRESH_MAX_AGE_DAYS`.
 local LAST_REFRESH_MAX_AGE_DAYS = 89
+
+---Warning shown before submitting a transfer to a bank without native Verification of Payee support.
+local VOP_WARNING = "This bank does not support Verification of Payee (VoP). "
+  .. "Please verify the recipient's name and IBAN yourself before authorizing the transfer.\n\n"
+  .. "This warning can be disabled via the suppressVopWarning configuration option."
 local demoConnection = require("yaxi.connections.demo")
 local errors = require("yaxi.errors")
 local interrupt = require("yaxi.interrupt")
@@ -244,7 +251,7 @@ end
 ---Build the final refresh response and record the last-refresh timestamp.
 ---@param sess YAXI.MoneyMoney.Session
 ---@param iban string
----@param paymentTypes MM.PaymentTypeConst[]? Per-account payment types from `MM.Account`
+---@param paymentTypes MM.PaymentTypeConst[]? Per-account payment types reported in the response
 ---@return MM.RefreshAccountResponse
 local function finishRefresh(sess, iban, paymentTypes)
   local response = result.buildRefreshResponse(sess, iban, paymentTypes)
@@ -364,6 +371,7 @@ function YAXI.ListAccounts(knownAccounts)
   end)
 end
 
+---@return MM.RefreshAccountResponse|MM.SessionChallenge|MM.ErrorMessage
 function YAXI.RefreshAccount(account, since, isKnownTransactionId, step, credentials)
   logCall(
     "RefreshAccount",
@@ -378,17 +386,19 @@ function YAXI.RefreshAccount(account, since, isKnownTransactionId, step, credent
     "credentials",
     credentials
   )
-  ---@diagnostic disable-next-line: redundant-return-value
   return protected(function()
     assert(session, "No active session")
     local iban = assert(account.iban, "Account has no IBAN")
     since = clampSince(session, iban, since)
 
+    local yaxiAccountsByIban = LocalStorage[StorageKey.AccountsData] --[[@as table<string, YAXI.RoutexClient.Result.Account>?]]
+      or {}
+    local paymentTypes = accountMapping.derivePaymentTypes(yaxiAccountsByIban[iban], session.connection)
+
     if step == 1 or not step then
       local challenge = fetchBalances(session, iban, account.currency, account.name)
         or fetchTransactions(session, iban, account.currency, since or 0, account.name)
-      ---@diagnostic disable-next-line: undefined-field
-      return challenge or finishRefresh(session, iban, account.paymentTypes)
+      return challenge or finishRefresh(session, iban, paymentTypes)
     end
 
     -- step > 1: respond to interrupt
@@ -409,8 +419,7 @@ function YAXI.RefreshAccount(account, since, isKnownTransactionId, step, credent
     -- Continue with remaining phases
     challenge = fetchBalances(session, iban, account.currency, account.name)
       or fetchTransactions(session, iban, account.currency, since or 0, account.name)
-    ---@diagnostic disable-next-line: undefined-field
-    return challenge or finishRefresh(session, iban, account.paymentTypes)
+    return challenge or finishRefresh(session, iban, paymentTypes)
   end)
 end
 
@@ -418,7 +427,8 @@ function YAXI.GetTanMethods(account)
   logCall("GetTanMethods", "account", account)
   return protected(function()
     for _, conn in pairs(Connection.registry) do
-      if conn.bic == account.bic then
+      local bankInfo = BankInfo(account.bankCode or "")
+      if bankInfo and bankInfo.bic == conn.bic or conn.bic == account.bic then
         return conn:getEffectiveTanMethods()
       end
     end
@@ -446,17 +456,39 @@ function YAXI.SubmitPayment(step, account, payment, tanMethod, credentials)
 
     if step == 1 then
       session:resetInterruptState()
+
+      -- Banks without native VoP get a synthetic confirmation BEFORE `callTransfer`,
+      -- so the user can still verify (and abort) while no transfer is in flight.
+      if session.connection.vop == VopMode.None and not YAXI_SUPPRESS_VOP_WARNING then
+        session.pendingVopWarning = true
+        return {
+          status = "pending",
+          challenge = VOP_WARNING,
+          poll = true,
+          vop = VOP_WARNING,
+        }
+      end
+    end
+
+    if session.pendingVopWarning then
+      session.pendingVopWarning = nil
       MM.printStatus("Submitting transfer…")
       local obResponse = service.callTransfer(session, account, payment, payment.type or PaymentTypeTransfer)
-      return interrupt.mapToPaymentResponse(session, obResponse, tanMethod, YAXI_SUPPRESS_VOP_WARNING)
-    else
-      if session.result then
-        local ticketId = session.activeTicket and ticketMod.getId(session.activeTicket) or nil
-        return { status = "accepted", orderId = ticketId }
-      end
-      local obResponse = service.respondToInterrupt(session, credentials --[[@as string[]|MM.TanMethod[] ]])
-      return interrupt.mapToPaymentResponse(session, obResponse, tanMethod, YAXI_SUPPRESS_VOP_WARNING)
+      return interrupt.mapToPaymentResponse(session, obResponse, tanMethod)
     end
+
+    if step == 1 then
+      MM.printStatus("Submitting transfer…")
+      local obResponse = service.callTransfer(session, account, payment, payment.type or PaymentTypeTransfer)
+      return interrupt.mapToPaymentResponse(session, obResponse, tanMethod)
+    end
+
+    if session.result then
+      local ticketId = session.activeTicket and ticketMod.getId(session.activeTicket) or nil
+      return { status = "accepted", orderId = ticketId }
+    end
+    local obResponse = service.respondToInterrupt(session, credentials --[[@as string[]|MM.TanMethod[] ]])
+    return interrupt.mapToPaymentResponse(session, obResponse, tanMethod)
   end)
 end
 

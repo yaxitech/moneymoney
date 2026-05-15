@@ -3,7 +3,7 @@
 
 local base64 = require("routex-client.util.base64")
 local json = require("routex-client.vendor.json")
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 local manifest = require("yaxi.manifest")
 local ticketMod = require("yaxi.ticket")
 local util = require("yaxi.util")

@@ -3,7 +3,7 @@
 
 -- YAXI Interrupt Mapping — `OBResponse` → MoneyMoney session challenge / payment response
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 
 local rc = require("routex-client")
 local Confirmation = rc.Confirmation
@@ -12,12 +12,9 @@ local Field = rc.Field
 local InputType = rc.InputType
 local DialogContext = rc.DialogContext
 
-local enum = require("yaxi.enum")
 local svcMod = require("yaxi.service")
 local ticketMod = require("yaxi.ticket")
 local util = require("yaxi.util")
-
-local VopMode = enum.VopMode
 
 local MAX_PAYMENT_STEPS = 10 -- guard against runaway server interrupt loops
 
@@ -230,10 +227,8 @@ end
 
 ---Build a user-facing `MM.PaymentResponse` from the current session state.
 ---@param session YAXI.MoneyMoney.Session
----@param connection YAXI.MoneyMoney.Connection
----@param suppressVopWarning boolean?
 ---@return MM.PaymentResponse
-local function buildPaymentChallenge(session, connection, suppressVopWarning)
+local function buildPaymentChallenge(session)
   local orderId = session.activeTicket and ticketMod.getId(session.activeTicket) or nil
   ---@type MM.PaymentResponse
   local res
@@ -278,11 +273,6 @@ local function buildPaymentChallenge(session, connection, suppressVopWarning)
     error("Unexpected state: no dialog, redirect, or result")
   end
 
-  if connection.vop == VopMode.None and not suppressVopWarning and not res.vop then
-    res.vop = "This bank does not support Verification of Payee (VoP). "
-      .. "Please verify the recipient's name and IBAN yourself before authorizing the transfer.\n\n"
-      .. "This warning can be disabled via the suppressVopWarning configuration option."
-  end
   return res
 end
 
@@ -291,9 +281,8 @@ end
 ---@param session YAXI.MoneyMoney.Session
 ---@param obResponse YAXI.RoutexClient.OBResponse
 ---@param tanMethod MM.TanMethod?
----@param suppressVopWarning boolean?
 ---@return MM.PaymentResponse|MM.SessionChallenge
-function M.mapToPaymentResponse(session, obResponse, tanMethod, suppressVopWarning)
+function M.mapToPaymentResponse(session, obResponse, tanMethod)
   local connection = session.connection
 
   for _ = 1, MAX_PAYMENT_STEPS do
@@ -314,10 +303,10 @@ function M.mapToPaymentResponse(session, obResponse, tanMethod, suppressVopWarni
         log:debug("VopCheck: auto-confirming pending check")
         obResponse = svcMod.confirmDialog(session)
       else
-        return buildPaymentChallenge(session, connection, suppressVopWarning)
+        return buildPaymentChallenge(session)
       end
     elseif session.redirect then
-      return buildPaymentChallenge(session, connection, suppressVopWarning)
+      return buildPaymentChallenge(session)
     end
   end
 

@@ -3,7 +3,7 @@
 
 -- Result decoding and caching for YAXI service responses.
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 
 local balanceMapping = require("yaxi.mapping.balance")
 local base64 = require("routex-client.util.base64")
@@ -72,7 +72,7 @@ end
 ---Build the final `RefreshAccount` response from cached balances + transactions.
 ---@param sess YAXI.MoneyMoney.Session
 ---@param iban string
----@param paymentTypes MM.PaymentTypeConst[]? Per-account payment types from `MM.Account`
+---@param paymentTypes MM.PaymentTypeConst[]? Per-account payment types reported in the response
 ---@return MM.RefreshAccountResponse
 function M.buildRefreshResponse(sess, iban, paymentTypes)
   local balanceResult = sess.balancesCache and sess.balancesCache[iban]

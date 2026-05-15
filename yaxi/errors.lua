@@ -3,7 +3,7 @@
 
 -- Error handling for the YAXI MoneyMoney extension.
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 
 local rc = require("routex-client")
 local InvalidCredentialsError = rc.InvalidCredentialsError

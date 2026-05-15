@@ -277,28 +277,44 @@ context("yaxi.mapping.account", function()
       assert.are_equal("BYLADEM1001", result.bic)
     end)
 
-    test("assigns paymentTypes when capabilities include SinglePayment", function()
+    test("does not inject paymentTypes onto MM.Account", function()
       local result = accountMapping.mapAccount({
         type = "Current",
         iban = "DE02120300000000202051",
         currency = "EUR",
         name = "With Payment",
-        capabilities = { "SinglePayment", "AccountDetails" },
-      }, connection)
-      ---@diagnostic disable-next-line: undefined-field
-      assert.are_same(paymentTypes, result.paymentTypes)
-    end)
-
-    test("omits paymentTypes when capabilities lack SinglePayment", function()
-      local result = accountMapping.mapAccount({
-        type = "Current",
-        iban = "DE02120300000000202051",
-        currency = "EUR",
-        name = "Read-only",
-        capabilities = { "AccountDetails", "Balances" },
+        capabilities = { "SinglePayment", "Balances" },
       }, connection)
       ---@diagnostic disable-next-line: undefined-field
       assert.is_nil(result.paymentTypes)
+    end)
+  end)
+
+  context("derivePaymentTypes", function()
+    local paymentTypes = { PaymentTypeTransfer, PaymentTypeInstantTransfer }
+    local connection = { bic = "COBADEHDXXX", paymentTypes = paymentTypes } ---@type any
+
+    test("returns connection paymentTypes when capabilities include SinglePayment", function()
+      local result = accountMapping.derivePaymentTypes({
+        capabilities = { "SinglePayment", "Balances" },
+      }, connection)
+      assert.are_same(paymentTypes, result)
+    end)
+
+    test("returns nil when capabilities lack SinglePayment", function()
+      local result = accountMapping.derivePaymentTypes({
+        capabilities = { "Balances", "Transactions" },
+      }, connection)
+      assert.is_nil(result)
+    end)
+
+    test("returns connection paymentTypes when capabilities are absent", function()
+      local result = accountMapping.derivePaymentTypes({}, connection)
+      assert.are_same(paymentTypes, result)
+    end)
+
+    test("returns nil for a missing YAXI account", function()
+      assert.is_nil(accountMapping.derivePaymentTypes(nil, connection))
     end)
   end)
 end)

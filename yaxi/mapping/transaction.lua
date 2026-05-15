@@ -3,7 +3,7 @@
 
 -- YAXI Transaction Mapper — YAXI transaction → `MM.Transaction`
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 
 local util = require("yaxi.util")
 
@@ -59,7 +59,7 @@ local function extractTransactionCode(bankTransactionCodes, preferences)
       codeType = "other"
     end
 
-    local mmCode = param and TransactionCode(param) or nil
+    local mmCode = param and TransactionCode(param) or nil ---@type MM.TransactionCodeResult?
     local codeName = mmCode and mmCode.name or nil ---@type string?
     if codeName ~= nil then
       -- Check if this code type is preferred

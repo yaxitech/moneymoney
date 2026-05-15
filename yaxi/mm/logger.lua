@@ -3,7 +3,7 @@
 
 -- Log appender bridging `lualogging` to MoneyMoney's `MM.printDebug`/`print`.
 
-local logging = require("routex-client.logging")
+local logging = require("routex-client.logging") --[[@as lualogging]]
 local prepareLogMsg = logging.prepareLogMsg or error("prepareLogMsg not found in logging module")
 
 local M = setmetatable({}, {
@@ -68,6 +68,7 @@ function M.new(params, ...)
 
   local logPatterns = logging.buildLogPatterns(params.logPatterns or defaultLogPatterns, params.logPattern)
 
+  ---@type table<lualogging.Level, boolean?>
   local SOURCE_LEVELS = {
     [logging.DEBUG] = true,
     [logging.ERROR] = true,
@@ -88,5 +89,4 @@ function M.new(params, ...)
   end, startLevel)
 end
 
-logging.MM = M
 return M

@@ -3,7 +3,7 @@
 
 -- YAXI Service Orchestrator — Issues tickets and calls `RoutexClient`
 
-local log = require("routex-client.logging").defaultLogger()
+local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogger()
 
 local rc = require("routex-client")
 local AccountField = rc.AccountField

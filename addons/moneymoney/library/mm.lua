@@ -1277,7 +1277,10 @@ LocalStorage = {}
 ---
 ---Using `poll=true` on the SessionChallenge triggers the decoupled polling UI
 ---(spinner, no TAN input) regardless of name.
----@alias MM.TanMethodName
+---Canonical entries control UI behavior; any other string is accepted and rendered
+---verbatim. Banks routinely send unrecognized labels (e.g. raw `Selection` options
+---before normalization), so the alias falls back to `string`.
+---@alias MM.TanMethodName string
 ---| "iTAN"               # Indexed TAN list entry
 ---| "mobileTAN"          # SMS code entry (also: `smsTAN`, `mTAN`)
 ---| "chipTAN manuell"    # Manual chipTAN (type start code on TAN generator)
@@ -1381,7 +1384,7 @@ LocalStorage = {}
 ---@field MapAccount? fun(account: MM.Account): MM.Account Map/transform an account returned by `ListAccounts`.
 ---@field FetchStatements? fun(accounts: MM.Account[], knownIdentifiers: table<string, boolean>, step?: integer, credentials?: string[], interactive?: boolean): MM.FetchStatementsResponse|MM.ErrorMessage Fetch PDF bank statements.
 ---@field FetchScheduledPayments? fun(account: MM.Account): MM.FetchScheduledPaymentsResponse|MM.ErrorMessage Fetch scheduled/standing payments.
----@field SubmitPayment? fun(step: integer, account: MM.Account, payment: MM.Payment, tanMethod?: MM.TanMethod, credentials?: string[]): MM.SubmitPaymentResult Submit a payment; supports multi-step 2FA flows. Must return table or error string.
+---@field SubmitPayment? fun(step: integer, account: MM.Account, payment: MM.Payment, tanMethod?: MM.TanMethod, credentials?: MM.Credentials): MM.SubmitPaymentResult Submit a payment; supports multi-step 2FA flows. Must return table or error string.
 
 -- ── MM.ExporterExtension ──────────────────────────────────────────────────────
 

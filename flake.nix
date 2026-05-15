@@ -18,6 +18,15 @@
       let
         lib = nixpkgs.lib;
         pkgs = nixpkgs.legacyPackages.${system};
+        # Source with symlinks dereferenced. The submodule
+        # `yaxi/routex-client-lua/routex-client/vendor/json/init.lua` is a
+        # symlink to `json.lua`; emmylua_check 0.23 handles symlinks
+        # non-deterministically, so we materialize a regular file tree
+        # before handing it to the linters.
+        dereferencedSource = pkgs.runCommand "yaxi-moneymoney-source" { } ''
+          mkdir -p "$out"
+          cp -RL ${lib.cleanSource self}/. "$out/"
+        '';
       in
       {
         formatter = pkgs.nixfmt-tree;
@@ -92,13 +101,13 @@
 
         checks."stylua" = pkgs.runCommand "yaxi-moneymoney-stylua" { } ''
           ${lib.getExe pkgs.stylua} --version
-          ${lib.getExe pkgs.stylua} -f ${./stylua.toml} --check ${lib.cleanSource self}
+          ${lib.getExe pkgs.stylua} -f ${./stylua.toml} --check ${dereferencedSource}
           touch "$out"
         '';
 
         checks."emmylua_check" = pkgs.runCommand "yaxi-moneymoney-emmylua_check" { } ''
           ${lib.getExe pkgs.emmylua-check} --version
-          ${lib.getExe pkgs.emmylua-check} --warnings-as-errors ${lib.cleanSource self}
+          ${lib.getExe pkgs.emmylua-check} --warnings-as-errors ${dereferencedSource}
           touch "$out"
         '';
 
