@@ -102,9 +102,11 @@ end
 ---@param session YAXI.MoneyMoney.Session
 ---@param serviceName YAXI.RoutexClient.Service
 ---@param ticket string Signed YAXI ticket JWT
-local function prepareCall(session, serviceName, ticket)
+---@param client YAXI.RoutexClient.Core Client issuing the call (so its trace is fetched on error)
+local function prepareCall(session, serviceName, ticket, client)
   session.activeTicket = ticket
   session.activeService = serviceName
+  session.activeClient = client
   recordCall(serviceName)
 end
 
@@ -184,7 +186,7 @@ end
 ---@return YAXI.RoutexClient.OBResponse
 function M.callAccounts(session)
   local ticket = session.ticketGenerator:accounts(MM.uuid())
-  prepareCall(session, Service.Accounts, ticket)
+  prepareCall(session, Service.Accounts, ticket, session.client)
   log:debug("Calling accounts service")
 
   return session.client:accounts({
@@ -209,7 +211,7 @@ end
 function M.callBalances(session, accounts)
   return tryRefresh(session, function()
     local ticket = session.ticketGenerator:balances(MM.uuid())
-    prepareCall(session, Service.Balances, ticket)
+    prepareCall(session, Service.Balances, ticket, session.refreshClient)
     log:debug("Refreshing balances for %d account(s)", #accounts)
 
     return session.refreshClient:balances({
@@ -220,7 +222,7 @@ function M.callBalances(session, accounts)
     })
   end, function()
     local ticket = session.ticketGenerator:balances(MM.uuid())
-    prepareCall(session, Service.Balances, ticket)
+    prepareCall(session, Service.Balances, ticket, session.client)
     log:debug("Calling balances service for %d account(s)", #accounts)
 
     return session.client:balances({
@@ -257,7 +259,7 @@ function M.callTransactions(session, iban, currency, since)
   return tryRefresh(session, function()
     log:debug("Refreshing transactions for %s (since=%s)", iban, transactionMapping.timestampToDate(since))
     local ticket = transactionsTicket()
-    prepareCall(session, Service.Transactions, ticket)
+    prepareCall(session, Service.Transactions, ticket, session.refreshClient)
 
     return session.refreshClient:transactions({
       connectionData = assert(session.credentials.connectionData),
@@ -267,7 +269,7 @@ function M.callTransactions(session, iban, currency, since)
   end, function()
     log:debug("Calling transactions service for %s (since=%s)", iban, transactionMapping.timestampToDate(since))
     local ticket = transactionsTicket()
-    prepareCall(session, Service.Transactions, ticket)
+    prepareCall(session, Service.Transactions, ticket, session.client)
 
     return session.client:transactions({
       credentials = session.credentials,
@@ -286,7 +288,7 @@ end
 ---@return YAXI.RoutexClient.OBResponse
 function M.callTransfer(session, account, payment, mmPaymentType)
   local ticket = session.ticketGenerator:transfer(MM.uuid())
-  prepareCall(session, Service.Transfer, ticket)
+  prepareCall(session, Service.Transfer, ticket, session.client)
 
   local product = session.connection:paymentProduct(mmPaymentType)
   log:debug("Calling transfer service (product=%s, amount=%s %s)", product, payment.amount, payment.currency or "EUR")

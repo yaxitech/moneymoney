@@ -8,6 +8,10 @@
   If the bank requires authorization (SCA) for a background refresh, the extension asks for a manual refresh instead of prompting, which would otherwise trigger an unexpected SCA.
   Background refreshes signal the user's own connection as in-session, so the bank applies its regular access limits rather than the stricter cap on requests without a user in session.
 
+### Fixed
+
+- Error trace files now contain the trace of the failed service call instead of an unrelated one from earlier in the session.
+
 ## [0.2] - 2026-05-15
 
 ### Added

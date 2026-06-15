@@ -52,13 +52,17 @@ function M.write(session)
     return nil
   end
 
-  local traceId = session.client:traceId()
+  -- Fetch the trace from the client that issued the failing call. Each client
+  -- keeps its own `traceId`, so reading `session.client` would return a stale
+  -- trace when the call went through the refresh client.
+  local client = session.activeClient or session.client
+  local traceId = client:traceId()
   if not traceId or traceId == lastWrittenTraceId then
     return nil
   end
 
   local ticketForTrace = session.ticketGenerator:accounts(MM.uuid())
-  local ok, trace = pcall(session.client.trace, session.client, ticketForTrace, traceId)
+  local ok, trace = pcall(client.trace, client, ticketForTrace, traceId)
   if not ok or not trace then
     return nil
   end

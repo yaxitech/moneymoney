@@ -46,6 +46,7 @@ local YAXI_API_URL = "https://api.yaxi.tech"
 ---@field savedSession binary? Latest routex session token seen during this MoneyMoney session (for reuse across service calls)
 ---@field activeTicket string? YAXI ticket JWT for the current service call
 ---@field activeService YAXI.RoutexClient.Service? Current service name
+---@field activeClient YAXI.RoutexClient.Core? Client that issued the current service call (used to fetch its trace on error)
 ---@field phase YAXI.MoneyMoney.Session.Phase? Multi-phase tracking for `RefreshAccount`
 ---@field balancesCache YAXI.MoneyMoney.Session.BalancesCache? Decoded balances keyed by IBAN
 ---@field transactionsCache YAXI.MoneyMoney.Session.TransactionsCache? Decoded transactions keyed by IBAN
