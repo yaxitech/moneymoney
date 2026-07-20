@@ -128,6 +128,59 @@ end
 
 --endregion Monkey-patch `RoutexClient._readOBResponse`
 
+--region Monkey-patch `RoutexRefreshClient._readResponse`
+
+-- Same status-code blindness as above, but worse for the refresh client: its
+-- success shape is `{result?, session?, connectionData?}`, so an error body like
+-- `{"InterruptError":{}}` arriving with `status = 200` doesn't fail parsing — it
+-- silently becomes an empty response. Detect bodies without any success field
+-- and re-invoke `_handleResponse` with `status = 400` to raise the typed error
+-- (e.g. `InterruptError`, on which the extension falls back to the interactive
+-- client).
+
+local RRC = require("routex-client.refresh").RoutexRefreshClient --[[@as table]]
+
+---@diagnostic disable-next-line: unnecessary-if
+if not RRC._readResponsePatched then
+  local _originalReadResponse = RRC._readResponse --[[@as function]]
+  local _handleResponse = RRC._handleResponse --[[@as function]]
+
+  local jsonDecode = require("routex-client.vendor.json").decode
+  local jsonEncode = require("routex-client.vendor.json").encode
+
+  ---@param response YAXI.Http.Response
+  ---@return YAXI.RoutexRefreshClient.Response
+  RRC._readResponse = function(response)
+    local decodeOk, body = pcall(jsonDecode, response.body)
+    if decodeOk then
+      -- Normalize bare JSON string errors like `"UnsupportedProduct"` (see above)
+      if type(body) == "string" then
+        response.body = jsonEncode({ [body] = {} })
+        body = { [body] = {} }
+      end
+      if
+        type(body) == "table"
+        and body.result == nil
+        and body.session == nil
+        and body.connectionData == nil
+        and next(body) ~= nil
+      then
+        response.status = 400
+        _handleResponse(response)
+
+        -- `_handleResponse` didn't recognize the error variant
+        error(rc.UnexpectedError:new(response.body))
+      end
+    end
+
+    return _originalReadResponse(response)
+  end
+
+  RRC._readResponsePatched = true
+end
+
+--endregion Monkey-patch `RoutexRefreshClient._readResponse`
+
 return {
   MMHttpClient = MMHttpClient,
 }

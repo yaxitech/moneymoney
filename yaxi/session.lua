@@ -13,9 +13,15 @@ local Result = rc.Result
 local Dialog = rc.Dialog
 local Redirect = rc.Redirect
 local RedirectHandle = rc.RedirectHandle
+local refresh = require("routex-client.refresh")
+local RoutexRefreshClient = refresh.RoutexRefreshClient
+local UserInSession = refresh.UserInSession
 
 local TicketGenerator = require("yaxi.ticket").Generator
 local MMHttpClient = require("yaxi.mm.http").MMHttpClient
+local resultMod = require("yaxi.result")
+
+local YAXI_API_URL = "https://api.yaxi.tech"
 
 ---@class YAXI.MoneyMoney.Session.BalanceEntry
 ---@field balance number Primary balance amount
@@ -27,18 +33,20 @@ local MMHttpClient = require("yaxi.mm.http").MMHttpClient
 ---@class YAXI.MoneyMoney.Session
 ---@field apiKeySecret string Base64-encoded API key secret for JWT verification
 ---@field connection YAXI.MoneyMoney.Connection The bank connection this session operates on
----@field client YAXI.RoutexClient.RoutexClient `RoutexClient` instance for API calls
+---@field client YAXI.RoutexClient.RoutexClient `RoutexClient` instance for interactive API calls
+---@field refreshClient YAXI.RoutexRefreshClient `RoutexRefreshClient` instance for non-interactive API calls
+---@field interactive boolean? Whether MoneyMoney may prompt the user (from `InitializeSession2`)
 ---@field ticketGenerator YAXI.MoneyMoney.Ticket.Generator Generates signed YAXI service tickets
 ---@field credentials YAXI.RoutexClient.Credentials Credentials passed to each service call
 ---@field connectionInfo YAXI.RoutexClient.ConnectionInfo Metadata from `RoutexClient:info()` (credentials model, labels)
 ---@field dialog YAXI.RoutexClient.Dialog? Current `Dialog` interrupt (if any)
 ---@field redirect YAXI.RoutexClient.Redirect? Current `Redirect` interrupt (if any)
 ---@field result YAXI.RoutexClient.Result? Current `Result` (if service completed)
+---@field private _resultData any? Decoded payload of the current result (see `resultData`)
 ---@field savedSession binary? Latest routex session token seen during this MoneyMoney session (for reuse across service calls)
 ---@field activeTicket string? YAXI ticket JWT for the current service call
 ---@field activeService YAXI.RoutexClient.Service? Current service name
 ---@field phase YAXI.MoneyMoney.Session.Phase? Multi-phase tracking for `RefreshAccount`
----@field balancesResult YAXI.RoutexClient.Result? Stashed balances `Result` during `RefreshAccount`
 ---@field balancesCache YAXI.MoneyMoney.Session.BalancesCache? Decoded balances keyed by IBAN
 ---@field transactionsCache YAXI.MoneyMoney.Session.TransactionsCache? Decoded transactions keyed by IBAN
 ---@field sessionType MM.SessionType? MoneyMoney session type (e.g. `"refresh"`, `"new account"`)
@@ -60,8 +68,13 @@ function Session:new(connection, apiKeyId, apiKeySecret, version)
 
   obj.apiKeySecret = apiKeySecret
   obj.connection = connection
-  obj.client = RoutexClient:new("https://api.yaxi.tech", MMHttpClient:new(version))
+  local httpClient = MMHttpClient:new(version)
+  obj.client = RoutexClient:new(YAXI_API_URL, httpClient)
   obj.client:setRedirectUri("https://service.moneymoney-app.com/1/redirect")
+  obj.refreshClient = RoutexRefreshClient:new(YAXI_API_URL, httpClient)
+  -- Signal the user's own connection as in-session so YAXI forwards its source IP to the
+  -- bank, lifting the bank's limit on requests without a user in session.
+  obj.refreshClient:setUserInSession(UserInSession.OnThisConnection)
   obj.ticketGenerator = TicketGenerator:new(apiKeyId, apiKeySecret)
 
   local connectionData = LocalStorage[connection.id] --[[@as string?]]
@@ -112,7 +125,43 @@ function Session:resetInterruptState()
   self.dialog = nil
   self.redirect = nil
   self.result = nil
+  self._resultData = nil
   self.pendingVopWarning = nil
+end
+
+---Decoded payload of the completed service call.
+---Interactive `Result`s wrap the payload in a JWT, which is decoded and
+---verified on first access.
+---@return any
+function Session:resultData()
+  if self._resultData == nil and self.result then
+    self._resultData = resultMod.decodeResultData(self.result.jwt, self.apiKeySecret)
+  end
+  return self._resultData
+end
+
+---Whether the non-interactive `RoutexRefreshClient` should serve this session's read
+---calls: a non-interactive session carrying `connectionData` from a prior interactive
+---flow. Interactive sessions always use the interactive `RoutexClient`.
+---@return boolean
+function Session:canRefresh()
+  return self.credentials.connectionData ~= nil and not self.interactive
+end
+
+---Companion to `storeResponse` for `RoutexRefreshClient` responses, which
+---carry the decoded payload directly (no JWT envelope, no interrupt branches).
+---@param response YAXI.RoutexRefreshClient.Response|{ result: any }
+function Session:storeRefreshResponse(response)
+  self:resetInterruptState()
+  self._resultData = response.result
+  log:debug("Received refresh response for %s", self.activeService or "unknown")
+
+  if response.connectionData then
+    self.credentials.connectionData = response.connectionData
+  end
+  -- Keep the last seen session token if the response omits one; a subsequent
+  -- interactive fallback may still want it.
+  self.savedSession = response.session or self.savedSession
 end
 
 ---Classify and store an `OBResponse` into the appropriate state field

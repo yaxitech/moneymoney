@@ -70,7 +70,7 @@ end
 local function stubServiceCalls()
   local origCallTransactions = service.callTransactions
   local origMapToChallenge = interrupt.mapToChallenge
-  local origCacheTransactions = resultMod.cacheTransactionsResult
+  local origCacheTransactions = resultMod.cacheTransactions
   local origBuildRefresh = resultMod.buildRefreshResponse
 
   local captured = {} ---@type integer[]
@@ -81,12 +81,14 @@ local function stubServiceCalls()
     ---@diagnostic disable-next-line: missing-fields
     local mockResult = { jwt = "mock" } --[[@as YAXI.RoutexClient.Result]]
     _sess.result = mockResult
+    ---@diagnostic disable-next-line: access-invisible
+    _sess._resultData = {}
     return mockResult
   end
   interrupt.mapToChallenge = function(_sess, _obResponse)
     return nil
   end
-  resultMod.cacheTransactionsResult = function(_sess, _iban) end
+  resultMod.cacheTransactions = function(_sess, _iban, _transactions) end
   resultMod.buildRefreshResponse = function(_sess, _iban)
     return { balance = 42, transactions = {} }
   end
@@ -94,7 +96,7 @@ local function stubServiceCalls()
   return function()
     service.callTransactions = origCallTransactions
     interrupt.mapToChallenge = origMapToChallenge
-    resultMod.cacheTransactionsResult = origCacheTransactions
+    resultMod.cacheTransactions = origCacheTransactions
     resultMod.buildRefreshResponse = origBuildRefresh
     return captured
   end

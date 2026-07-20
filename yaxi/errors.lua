@@ -9,7 +9,8 @@ local rc = require("routex-client")
 local InvalidCredentialsError = rc.InvalidCredentialsError
 local CanceledError = rc.CanceledError
 local UnauthorizedError = rc.UnauthorizedError
-local ConsentExpiredError = rc.ConsentExpiredError
+local InterruptError = rc.InterruptError
+local AccessExceededError = rc.AccessExceededError
 
 local traces = require("yaxi.traces")
 
@@ -36,6 +37,21 @@ function M.errorHandler(session, err)
   ---@type string?
   local userMessage = (yaxiErr --[[@as table]])["userMessage"]
 
+  if yaxiErr:isInstanceOf(InterruptError) then
+    -- Expected control flow, not a failure: a non-interactive refresh hit an
+    -- SCA requirement. Keep `connectionData` and skip the trace; the next
+    -- interactive session falls back to the interactive client automatically.
+    return "Your bank requires authorization (SCA) to refresh this account. "
+      .. "Please refresh the account manually in MoneyMoney."
+  end
+
+  if yaxiErr:isInstanceOf(AccessExceededError) then
+    -- A background refresh hit the non-interactive refresh limit. Keep
+    -- `connectionData` and skip the trace; a manual (interactive) refresh is
+    -- not rate-limited.
+    return "The automatic refresh limit has been reached. Please refresh the account manually in MoneyMoney."
+  end
+
   -- Save trace for debugging (before early returns so trace is always captured)
   local tracePath = nil
   if session and session.activeService and session.activeTicket then
@@ -56,7 +72,7 @@ function M.errorHandler(session, err)
     return LoginFailed
   end
 
-  if yaxiErr:isInstanceOf(UnauthorizedError) or yaxiErr:isInstanceOf(ConsentExpiredError) then
+  if yaxiErr:isInstanceOf(UnauthorizedError) then
     -- Clear stale connection data
     if session then
       log:debug("Clearing connectionData for %s due to %s", session.connection.service, yaxiErr.name)

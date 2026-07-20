@@ -25,20 +25,24 @@ function M.decodeResultData(resultJWT, apiKeySecret)
   return payload.data.data
 end
 
----Decode a balances `Result` and populate the session's `balancesCache` keyed by IBAN.
+---Populate the session's `balancesCache` (keyed by IBAN) from decoded balances data.
+---The data crosses a JSON boundary, so nominally required fields may be absent.
 ---@param sess YAXI.MoneyMoney.Session
-function M.cacheBalancesResult(sess)
-  assert(sess.balancesResult, "No balances result")
-  local balancesData = M.decodeResultData(sess.balancesResult.jwt, sess.apiKeySecret)
+---@param balancesData YAXI.RoutexClient.Result.Balances?
+function M.cacheBalances(sess, balancesData)
+  assert(balancesData, "No balances data")
 
-  if balancesData.missingAccounts then
-    for _, missing in ipairs(balancesData.missingAccounts) do
+  ---@type YAXI.RoutexClient.AccountReference[]?
+  local missingAccounts = balancesData.missingAccounts
+  if missingAccounts then
+    for _, missing in ipairs(missingAccounts) do
       log:warn("Missing account in balances response: %s", missing.iban)
     end
   end
 
   sess.balancesCache = sess.balancesCache or {}
   for _, payload in ipairs(balancesData.balances or {}) do
+    ---@type string?
     local iban = payload.account and payload.account.iban
     if iban then
       sess.balancesCache[iban] = balanceMapping.pickBalance(payload.balances)
@@ -48,13 +52,11 @@ function M.cacheBalancesResult(sess)
   log:debug("Cached balances for %d account(s)", #(balancesData.balances or {}))
 end
 
----Decode a transactions `Result` and store in the session's `transactionsCache` for the given IBAN.
+---Store decoded transactions in the session's `transactionsCache` for the given IBAN.
 ---@param sess YAXI.MoneyMoney.Session
 ---@param iban string
-function M.cacheTransactionsResult(sess, iban)
-  assert(sess.result, "No transactions result")
-  local yaxiTransactions = M.decodeResultData(sess.result.jwt, sess.apiKeySecret)
-
+---@param yaxiTransactions YAXI.RoutexClient.Result.Transaction[]?
+function M.cacheTransactions(sess, iban, yaxiTransactions)
   ---@type MM.Transaction[]
   local transactions = {}
   for _, tx in ipairs(yaxiTransactions or {}) do

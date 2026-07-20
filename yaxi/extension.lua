@@ -216,13 +216,14 @@ local function fetchBalances(sess, iban, currency, accountName)
       },
     }
   local obResponse = service.callBalances(sess, accountRefs)
-  local challenge = interrupt.mapToChallenge(sess, obResponse)
-  if challenge then
-    sess.phase = Phase.Balances
-    return challenge
+  if obResponse then
+    local challenge = interrupt.mapToChallenge(sess, obResponse)
+    if challenge then
+      sess.phase = Phase.Balances
+      return challenge
+    end
   end
-  sess.balancesResult = sess.result
-  result.cacheBalancesResult(sess)
+  result.cacheBalances(sess, sess:resultData())
   return nil
 end
 
@@ -239,12 +240,14 @@ local function fetchTransactions(sess, iban, currency, since, accountName)
   end
   MM.printStatus(string.format("Fetching transactions for %s…", accountName or iban))
   local obResponse = service.callTransactions(sess, iban, currency, since)
-  local challenge = interrupt.mapToChallenge(sess, obResponse)
-  if challenge then
-    sess.phase = Phase.Transactions
-    return challenge
+  if obResponse then
+    local challenge = interrupt.mapToChallenge(sess, obResponse)
+    if challenge then
+      sess.phase = Phase.Transactions
+      return challenge
+    end
   end
-  result.cacheTransactionsResult(sess, iban)
+  result.cacheTransactions(sess, iban, sess:resultData())
   return nil
 end
 
@@ -308,6 +311,7 @@ function YAXI.InitializeSession2(protocol, bankCode, step, credentials, interact
       local sess = Session:new(conn, YAXI_API_KEY_ID, YAXI_API_KEY_SECRET, manifest.version)
       session = sess
       sess.sessionType = sessionType
+      sess.interactive = interactive
       sess:setCredentials(credentials --[[@as string[] ]])
       MM.printStatus("Fetching accounts…")
       local obResponse = service.callAccounts(sess)
@@ -322,6 +326,7 @@ function YAXI.InitializeSession2(protocol, bankCode, step, credentials, interact
       local sess = Session:new(conn, YAXI_API_KEY_ID, YAXI_API_KEY_SECRET, manifest.version)
       session = sess
       sess.sessionType = sessionType
+      sess.interactive = interactive
       sess:setCredentials(credentials --[[@as string[] ]])
       return nil
     end
@@ -337,7 +342,7 @@ function YAXI.ListAccounts(knownAccounts)
       return "The session initialization did not produce a valid list of accounts"
     end
 
-    local yaxiAccounts = result.decodeResultData(session.result.jwt, session.apiKeySecret)
+    local yaxiAccounts = session:resultData()
     ---@type MM.Account[]
     local accounts = {}
     ---@type YAXI.RoutexClient.AccountReference[]
@@ -410,10 +415,9 @@ function YAXI.RefreshAccount(account, since, isKnownTransactionId, step, credent
 
     -- Cache the completed phase's result
     if session.phase == Phase.Balances then
-      session.balancesResult = session.result
-      result.cacheBalancesResult(session)
+      result.cacheBalances(session, session:resultData())
     elseif session.phase == Phase.Transactions then
-      result.cacheTransactionsResult(session, iban)
+      result.cacheTransactions(session, iban, session:resultData())
     end
 
     -- Continue with remaining phases

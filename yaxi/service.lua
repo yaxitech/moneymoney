@@ -161,6 +161,24 @@ local function handleRedirect(session, svc, client, oauthCode)
   })
 end
 
+---Run a read service call through the non-interactive `RoutexRefreshClient` when
+---possible (see `Session:canRefresh`), otherwise through the interactive
+---`RoutexClient`. Refresh-client errors propagate: a background refresh that needs an
+---interactive step (SCA) or hits the refresh limit surfaces as a manual-refresh
+---message rather than an automatic interactive call, which in a background session
+---would trigger a surprise SCA (e.g., a push notification from the banking app).
+---@param session YAXI.MoneyMoney.Session
+---@param refreshFn fun(): YAXI.RoutexRefreshClient.Response
+---@param interactiveFn fun(): YAXI.RoutexClient.OBResponse
+---@return YAXI.RoutexClient.OBResponse? obResponse `nil` if the refresh client completed the call (see `Session:resultData`)
+local function tryRefresh(session, refreshFn, interactiveFn)
+  if not session:canRefresh() then
+    return interactiveFn()
+  end
+  session:storeRefreshResponse(refreshFn())
+  return nil
+end
+
 ---Call the `Accounts` service.
 ---@param session YAXI.MoneyMoney.Session
 ---@return YAXI.RoutexClient.OBResponse
@@ -187,19 +205,32 @@ end
 ---Call the `Balances` service for one or more accounts.
 ---@param session YAXI.MoneyMoney.Session
 ---@param accounts YAXI.RoutexClient.AccountReference[]
----@return YAXI.RoutexClient.OBResponse
+---@return YAXI.RoutexClient.OBResponse? obResponse `nil` if the refresh client completed the call (see `Session:resultData`)
 function M.callBalances(session, accounts)
-  local ticket = session.ticketGenerator:balances(MM.uuid())
-  prepareCall(session, Service.Balances, ticket)
-  log:debug("Calling balances service for %d account(s)", #accounts)
+  return tryRefresh(session, function()
+    local ticket = session.ticketGenerator:balances(MM.uuid())
+    prepareCall(session, Service.Balances, ticket)
+    log:debug("Refreshing balances for %d account(s)", #accounts)
 
-  return session.client:balances({
-    accounts = accounts,
-    credentials = session.credentials,
-    ticket = ticket,
-    recurringConsents = true,
-    session = session:routexSession(),
-  })
+    return session.refreshClient:balances({
+      accounts = accounts,
+      connectionData = assert(session.credentials.connectionData),
+      ticket = ticket,
+      session = session:routexSession(),
+    })
+  end, function()
+    local ticket = session.ticketGenerator:balances(MM.uuid())
+    prepareCall(session, Service.Balances, ticket)
+    log:debug("Calling balances service for %d account(s)", #accounts)
+
+    return session.client:balances({
+      accounts = accounts,
+      credentials = session.credentials,
+      ticket = ticket,
+      recurringConsents = true,
+      session = session:routexSession(),
+    })
+  end)
 end
 
 ---Call the `Transactions` service.
@@ -207,26 +238,44 @@ end
 ---@param iban string
 ---@param currency string?
 ---@param since integer POSIX timestamp
----@return YAXI.RoutexClient.OBResponse
+---@return YAXI.RoutexClient.OBResponse? obResponse `nil` if the refresh client completed the call (see `Session:resultData`)
 function M.callTransactions(session, iban, currency, since)
-  log:debug("Calling transactions service for %s (since=%s)", iban, transactionMapping.timestampToDate(since))
-  local ticket = session.ticketGenerator:transactions(MM.uuid(), {
-    account = {
-      iban = iban,
-      currency = currency,
-    },
-    range = {
-      from = transactionMapping.timestampToDate(since),
-    },
-  })
-  prepareCall(session, Service.Transactions, ticket)
+  ---Account and date range live in the ticket.
+  ---@return string ticket
+  local function transactionsTicket()
+    return session.ticketGenerator:transactions(MM.uuid(), {
+      account = {
+        iban = iban,
+        currency = currency,
+      },
+      range = {
+        from = transactionMapping.timestampToDate(since),
+      },
+    })
+  end
 
-  return session.client:transactions({
-    credentials = session.credentials,
-    ticket = ticket,
-    recurringConsents = true,
-    session = session:routexSession(),
-  })
+  return tryRefresh(session, function()
+    log:debug("Refreshing transactions for %s (since=%s)", iban, transactionMapping.timestampToDate(since))
+    local ticket = transactionsTicket()
+    prepareCall(session, Service.Transactions, ticket)
+
+    return session.refreshClient:transactions({
+      connectionData = assert(session.credentials.connectionData),
+      ticket = ticket,
+      session = session:routexSession(),
+    })
+  end, function()
+    log:debug("Calling transactions service for %s (since=%s)", iban, transactionMapping.timestampToDate(since))
+    local ticket = transactionsTicket()
+    prepareCall(session, Service.Transactions, ticket)
+
+    return session.client:transactions({
+      credentials = session.credentials,
+      ticket = ticket,
+      recurringConsents = true,
+      session = session:routexSession(),
+    })
+  end)
 end
 
 ---Call the `Transfer` service.

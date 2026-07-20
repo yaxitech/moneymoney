@@ -15,10 +15,11 @@ extension.setup({
 })
 
 -- Minimize API requests to stay within rate limits (150 req/60s):
--- reuse one RoutexClient (single key settlement) and cache info() per connection.
+-- reuse one client per kind (single key settlement) and cache info() per connection.
 do
   local rc = require("routex-client")
   local RoutexClient = rc.RoutexClient
+  local RoutexRefreshClient = require("routex-client.refresh").RoutexRefreshClient
   local MMHttpClient = require("yaxi.mm.http").MMHttpClient
   local manifest = require("yaxi.manifest")
 
@@ -29,10 +30,16 @@ do
     return sharedClient
   end
 
+  local sharedRefreshClient = RoutexRefreshClient:new("https://api.yaxi.tech", MMHttpClient:new(manifest.version))
+
+  RoutexRefreshClient.new = function()
+    return sharedRefreshClient
+  end
+
   local origInfo = RoutexClient.info
   ---@type table<string, any>
   local infoCache = {}
-  RoutexClient.info = function(self, opts) ---@diagnostic disable-line: redundant-parameter
+  RoutexClient.info = function(self, opts) ---@diagnostic disable-line: assign-type-mismatch, redundant-parameter
     local cached = infoCache[opts.connectionId]
     if cached then ---@diagnostic disable-line: unnecessary-if
       return cached

@@ -50,7 +50,6 @@ local function mockSession()
   sess.connection = connection
   sess.balancesCache = nil
   sess.transactionsCache = nil
-  sess.balancesResult = nil
   sess.result = nil
   return sess
 end
@@ -78,7 +77,7 @@ context("yaxi.result", function()
     end)
   end)
 
-  context("cacheBalancesResult", function()
+  context("cacheBalances", function()
     test("populates balancesCache from a balances result", function()
       local balancesData = {
         balances = {
@@ -93,9 +92,9 @@ context("yaxi.result", function()
       }
       local token = encodeResultJWT(balancesData)
       local sess = mockSession()
-      sess.balancesResult = mockResult(token)
+      sess.result = mockResult(token)
 
-      result.cacheBalancesResult(sess)
+      result.cacheBalances(sess, sess:resultData())
 
       assert.is_not_nil(sess.balancesCache)
       local cached = sess.balancesCache[DEMO_IBAN]
@@ -119,22 +118,22 @@ context("yaxi.result", function()
       }
       local token = encodeResultJWT(balancesData)
       local sess = mockSession()
-      sess.balancesResult = mockResult(token)
+      sess.result = mockResult(token)
 
-      result.cacheBalancesResult(sess)
+      result.cacheBalances(sess, sess:resultData())
 
       assert.are_equal(12458.31, sess.balancesCache[DEMO_IBAN].balance)
       assert.are_equal(5000.00, sess.balancesCache["DE89370400440532013000"].balance)
     end)
   end)
 
-  context("cacheTransactionsResult", function()
+  context("cacheTransactions", function()
     test("decodes and maps real transactions through the full pipeline", function()
       local token = encodeResultJWT({ TX_SALARY, TX_DIRECT_DEBIT })
       local sess = mockSession()
       sess.result = mockResult(token)
 
-      result.cacheTransactionsResult(sess, DEMO_IBAN)
+      result.cacheTransactions(sess, DEMO_IBAN, sess:resultData())
 
       assert.is_not_nil(sess.transactionsCache)
       local cached = sess.transactionsCache[DEMO_IBAN]
@@ -160,7 +159,7 @@ context("yaxi.result", function()
       local sess = mockSession()
       sess.result = mockResult(token)
 
-      result.cacheTransactionsResult(sess, DEMO_IBAN)
+      result.cacheTransactions(sess, DEMO_IBAN, sess:resultData())
 
       assert.are_equal(1, #sess.transactionsCache[DEMO_IBAN])
     end)

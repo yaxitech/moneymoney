@@ -12,7 +12,6 @@ local rc = require("routex-client")
 local InvalidCredentialsError = rc.InvalidCredentialsError
 local CanceledError = rc.CanceledError
 local UnauthorizedError = rc.UnauthorizedError
-local ConsentExpiredError = rc.ConsentExpiredError
 local RCError = rc.Error
 
 context("yaxi.errors", function()
@@ -73,20 +72,6 @@ context("yaxi.errors", function()
 
       errors.errorHandler(session, err)
       assert.is_nil(LocalStorage["test-conn"])
-    end)
-
-    test("clears connectionData for ConsentExpiredError", function()
-      local conn = { id = "test-conn-2", service = "TestBank2" }
-      LocalStorage["test-conn-2"] = "stale-consent" --[[@as any]]
-      ---@diagnostic disable-next-line: missing-fields
-      local session = { connection = conn, activeService = nil, activeTicket = nil } --[[@as YAXI.MoneyMoney.Session]]
-
-      local err = setmetatable({}, ConsentExpiredError)
-      err.name = "ConsentExpiredError"
-      err.message = "Consent expired"
-
-      errors.errorHandler(session, err)
-      assert.is_nil(LocalStorage["test-conn-2"])
     end)
   end)
 

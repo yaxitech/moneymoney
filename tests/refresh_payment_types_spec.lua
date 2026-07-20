@@ -49,7 +49,7 @@ end
 local function stubAndCapture()
   local origCallTransactions = service.callTransactions
   local origMapToChallenge = interrupt.mapToChallenge
-  local origCacheTransactions = resultMod.cacheTransactionsResult
+  local origCacheTransactions = resultMod.cacheTransactions
   local origBuildRefresh = resultMod.buildRefreshResponse
 
   local captured
@@ -57,12 +57,14 @@ local function stubAndCapture()
     ---@diagnostic disable-next-line: missing-fields
     local mockResult = { jwt = "mock" } --[[@as YAXI.RoutexClient.Result]]
     _sess.result = mockResult
+    ---@diagnostic disable-next-line: access-invisible
+    _sess._resultData = {}
     return mockResult
   end
   interrupt.mapToChallenge = function()
     return nil
   end
-  resultMod.cacheTransactionsResult = function() end
+  resultMod.cacheTransactions = function() end
   resultMod.buildRefreshResponse = function(_sess, _iban, paymentTypes)
     captured = paymentTypes
     return { balance = 0, transactions = {}, paymentTypes = paymentTypes }
@@ -71,7 +73,7 @@ local function stubAndCapture()
   return function()
     service.callTransactions = origCallTransactions
     interrupt.mapToChallenge = origMapToChallenge
-    resultMod.cacheTransactionsResult = origCacheTransactions
+    resultMod.cacheTransactions = origCacheTransactions
     resultMod.buildRefreshResponse = origBuildRefresh
     return captured
   end
