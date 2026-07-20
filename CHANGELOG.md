@@ -11,6 +11,8 @@
 ### Fixed
 
 - Error trace files now contain the trace of the failed service call instead of an unrelated one from earlier in the session.
+- The displayed balance is now the most recent `Booked` or `Available` figure without a credit line that is already valid (its timestamp is not in the future), preferring `Booked` when both share the same timestamp.
+  This avoids surfacing a stale day (e.g. a prior bookkeeping day's closing balance next to the current interim one) or a not-yet-valid balance.
 
 ## [0.2] - 2026-05-15
 

@@ -20,6 +20,8 @@ local TX_STANDING_ORDER = fixtures.TX_STANDING_ORDER
 -- ---------------------------------------------------------------------------
 context("yaxi.mapping.balance", function()
   context("pickBalance", function()
+    local NOW = "2026-07-21T00:00:00Z"
+
     test("returns Booked as primary and Available delta as pending", function()
       ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
@@ -120,6 +122,79 @@ context("yaxi.mapping.balance", function()
       })
       assert.are_equal(100.00, result.balance)
       assert.are_equal(40.00, result.pendingBalance)
+    end)
+
+    test("picks the freshest Booked by dateTime (interim over closing)", function()
+      -- A prior bookkeeping day's closing balance and a fresher interim one: the later
+      -- dateTime wins, regardless of reported order.
+      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
+      local result = balanceMapping.pickBalance({
+        { balanceType = "Booked", amount = "1000.00", currency = "EUR", dateTime = "2026-07-19T23:59:59Z" },
+        { balanceType = "Booked", amount = "1200.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
+      }, NOW)
+      assert.are_equal(1200.00, result.balance)
+      assert.is_nil(result.pendingBalance)
+    end)
+
+    test("lets a fresher Available outrank an older Booked (recency wins across types)", function()
+      -- The freshest entry wins regardless of type; Booked no longer takes priority
+      -- over a more recent Available.
+      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
+      local result = balanceMapping.pickBalance({
+        { balanceType = "Booked", amount = "1000.00", currency = "EUR", dateTime = "2026-07-19T00:00:00Z" },
+        { balanceType = "Available", amount = "1020.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
+      }, NOW)
+      assert.are_equal(1020.00, result.balance)
+      assert.is_nil(result.pendingBalance)
+    end)
+
+    test("prefers Booked over Available on an equal dateTime, with the freshest pending delta", function()
+      -- Booked and Available share the newest dateTime, so Booked stays primary; the
+      -- fresher of the two Available entries drives the pending delta.
+      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
+      local result = balanceMapping.pickBalance({
+        { balanceType = "Booked", amount = "500.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
+        { balanceType = "Available", amount = "480.00", currency = "EUR", dateTime = "2026-07-19T23:00:00Z" },
+        { balanceType = "Available", amount = "530.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
+      }, NOW)
+      assert.are_equal(500.00, result.balance)
+      assert.are_equal(30.00, result.pendingBalance)
+    end)
+
+    test("ignores a dateTime in the future", function()
+      -- A balance not yet valid (dateTime > now) is skipped in favor of the freshest
+      -- past one.
+      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
+      local result = balanceMapping.pickBalance({
+        { balanceType = "Booked", amount = "1000.00", currency = "EUR", dateTime = "2026-07-22T00:00:00Z" },
+        { balanceType = "Booked", amount = "900.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
+      }, NOW)
+      assert.are_equal(900.00, result.balance)
+      assert.is_nil(result.pendingBalance)
+    end)
+
+    test("skips entries without a dateTime for the guideline pick", function()
+      -- The guideline considers only dated entries; a Booked without a dateTime loses
+      -- to a dated one.
+      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
+      local result = balanceMapping.pickBalance({
+        { balanceType = "Booked", amount = "700.00", currency = "EUR" },
+        { balanceType = "Booked", amount = "750.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
+      }, NOW)
+      assert.are_equal(750.00, result.balance)
+      assert.is_nil(result.pendingBalance)
+    end)
+
+    test("falls back to the type scan when no entry carries a dateTime", function()
+      -- Without any dateTime the guideline cannot apply, so the Booked > Available type
+      -- priority still selects the primary.
+      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
+      local result = balanceMapping.pickBalance({
+        { balanceType = "Available", amount = "900.00", currency = "EUR" },
+        { balanceType = "Booked", amount = "1000.00", currency = "EUR" },
+      }, NOW)
+      assert.are_equal(1000.00, result.balance)
+      assert.are_equal(-100.00, result.pendingBalance)
     end)
   end)
 end)
