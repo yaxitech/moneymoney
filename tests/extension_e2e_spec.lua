@@ -363,7 +363,7 @@ context("Extension e2e — YAXI Demo #online", function()
 
     ---Build the credentials for step N based on the challenge returned by step N-1.
     ---Mirrors the values MoneyMoney would pass for each interrupt type.
-    ---@param challenge table
+    ---@param challenge MM.SessionChallenge
     ---@return MM.Credentials
     local function credentialsForChallenge(challenge)
       if challenge.poll then
@@ -392,8 +392,9 @@ context("Extension e2e — YAXI Demo #online", function()
       local step = 2
       while challenge ~= nil do
         assert.is_table(challenge)
-        ---@cast challenge table
-        local creds = credentialsForChallenge(challenge)
+        local current = challenge
+        ---@cast current MM.SessionChallenge
+        local creds = credentialsForChallenge(current)
         challenge = InitializeSession2(ProtocolWebBanking, "YAXI Demo", step, creds, true, {}, "new account")
         step = step + 1
         assert.is_true(step <= 10) -- guard against infinite loop
