@@ -56,7 +56,6 @@ function M.mapAccount(yaxiAccount, connection)
     currency = yaxiAccount.currency,
     name = yaxiAccount.displayName or yaxiAccount.name or yaxiAccount.productName,
     owner = yaxiAccount.ownerName,
-    comment = yaxiAccount.productName,
   }
 
   if yaxiAccount.type then

@@ -7,6 +7,10 @@
 -- to include it as a library. It provides full type information for the MoneyMoney
 -- extension API without requiring any annotations in your extension scripts.
 --
+-- The extension script itself must be UTF-8 encoded, and all strings are exchanged
+-- as UTF-8 between the script and MoneyMoney, except where a parameter or return
+-- value is described as binary data.
+--
 ---@meta
 
 --#region MM Table — Global Utility Functions and Properties
@@ -17,11 +21,13 @@ MM = {}
 
 ---Encode binary data as Base64 string.
 ---@param data string Binary input
+---@param linebreaks? boolean Wrap output every 64 characters (PEM-style). Default: no line breaks.
 ---@return string encoded Base64-encoded string
-function MM.base64(data) end
+function MM.base64(data, linebreaks) end
 
 ---Decode Base64 string to binary data.
----@param encoded string Base64-encoded input
+---Also accepts Base64URL input (`-`/`_`, missing padding) and line breaks.
+---@param encoded string Base64- or Base64URL-encoded input
 ---@return string data Binary output
 function MM.base64decode(encoded) end
 
@@ -50,10 +56,10 @@ function MM.hmac384(key, data) end
 function MM.hmac512(key, data) end
 
 ---Format a currency amount using NSNumberFormatter (Unicode TR35 patterns).
----@overload fun(amount: number, currency: string): string
+---@overload fun(amount: number|string, currency?: string): string
 ---@param format string Format pattern (Unicode TR35)
 ---@param amount number|string Amount
----@param currency string ISO 4217 currency code
+---@param currency? string ISO 4217 currency code. Without it, only the amount is returned.
 ---@return string formatted Localized amount string
 function MM.localizeAmount(format, amount, currency) end
 
@@ -71,9 +77,10 @@ function MM.localizeDate(format, date) end
 ---@return string formatted Localized number string
 function MM.localizeNumber(format, num) end
 
----Translate a text string. Wrapper for NSLocalizedString.
+---Translate a text string. Wrapper for NSLocalizedString, primarily intended
+---for the extensions shipped with MoneyMoney.
 ---Only returns a translation if the text is in MoneyMoney's string tables.
----@param text string Text to translate
+---@param text string English text to translate
 ---@return string translated Translated text (or original if no translation)
 function MM.localizeText(text) end
 
@@ -115,7 +122,8 @@ function MM.time() end
 
 ---Convert a UTF-8 string to a different character encoding.
 ---Uses IANA charset names (e.g. `"ISO-8859-1"`, `"Windows-1252"`).
----When `bom` is true, a byte-order mark is prepended.
+---When `bom` is true, a byte-order mark is prepended if one exists for the
+---target charset.
 ---@param charset string Target encoding (IANA name)
 ---@param text string UTF-8 input
 ---@param bom? boolean Prepend BOM
@@ -171,92 +179,111 @@ function MM.sha3_256(data) end
 ---@param ... any Values to print
 function MM.printDebug(...) end
 
----AES-256 encryption. Supports CBC (default) and GCM modes.
----In GCM mode, returns `(ciphertext, tag)`. In CBC mode, returns `ciphertext`.
+---AES-256 encryption. Supports CBC (default) and GCM.
+---In GCM mode, returns `(encrypted, tag)`. In CBC mode, output is PKCS#7-padded.
 ---@param key string Binary AES key (32 bytes)
 ---@param iv string Binary IV (16 bytes for CBC, 12 bytes for GCM)
----@param plaintext string Data to encrypt
----@param mode? string Cipher mode, e.g. `"aes256 gcm"`. Default: CBC.
----@param aad? string Additional authenticated data (GCM only)
----@return string ciphertext
+---@param data string Data to encrypt
+---@param algorithm? string `"aes256 cbc"` (default) or `"aes256 gcm"`
+---@param aad? string Additional authenticated data (required for GCM, may be empty)
+---@return string? encrypted Encrypted data, or nil on unknown algorithm or wrong key/IV length
 ---@return string? tag Authentication tag (GCM only, 16 bytes)
-function MM.aes256encrypt(key, iv, plaintext, mode, aad) end
+function MM.aes256encrypt(key, iv, data, algorithm, aad) end
 
----AES-256 decryption. Supports CBC (default) and GCM modes.
+---AES-256 decryption. Supports CBC (default) and GCM.
 ---@param key string Binary AES key (32 bytes)
----@param iv string Binary IV
----@param ciphertext string Data to decrypt (in GCM mode, may include appended auth tag)
----@param mode? string Cipher mode, e.g. `"aes256 gcm"`. Default: CBC.
----@param aad? string Additional authenticated data (GCM only)
----@return string? plaintext Decrypted data, or nil on failure
-function MM.aes256decrypt(key, iv, ciphertext, mode, aad) end
+---@param iv string Binary IV (16 bytes for CBC, 12 bytes for GCM)
+---@param encrypted string Data to decrypt
+---@param algorithm? string `"aes256 cbc"` (default) or `"aes256 gcm"`
+---@param aad? string Additional authenticated data as passed to encryption (GCM)
+---@param tag? string 16-byte authentication tag from encryption (GCM)
+---@return string? data Decrypted data (CBC: padding removed), or nil on bad parameters, invalid padding, or failed authentication
+function MM.aes256decrypt(key, iv, encrypted, algorithm, aad, tag) end
 
----AES-128 encryption. Same interface as `aes256encrypt` but with 16-byte key.
+---AES-128 encryption. Same interface as `MM.aes256encrypt` but with a 16-byte key.
 ---@param key string Binary AES key (16 bytes)
 ---@param iv string Binary IV
----@param plaintext string Data to encrypt
----@param mode? string Cipher mode
+---@param data string Data to encrypt
+---@param algorithm? string Cipher algorithm
 ---@param aad? string Additional authenticated data (GCM only)
----@return string ciphertext
+---@return string? encrypted
 ---@return string? tag Authentication tag (GCM only)
-function MM.aes128encrypt(key, iv, plaintext, mode, aad) end
+function MM.aes128encrypt(key, iv, data, algorithm, aad) end
 
----AES-128 decryption. Same interface as `aes256decrypt` but with 16-byte key.
+---AES-128 decryption. Same interface as `MM.aes256decrypt` but with a 16-byte key.
 ---@param key string Binary AES key (16 bytes)
 ---@param iv string Binary IV
----@param ciphertext string Data to decrypt
----@param mode? string Cipher mode
----@return string? plaintext Decrypted data, or nil on failure
-function MM.aes128decrypt(key, iv, ciphertext, mode) end
+---@param encrypted string Data to decrypt
+---@param algorithm? string Cipher algorithm
+---@param aad? string Additional authenticated data (GCM only)
+---@param tag? string Authentication tag from encryption (GCM only)
+---@return string? data Decrypted data, or nil on failure
+function MM.aes128decrypt(key, iv, encrypted, algorithm, aad, tag) end
 
----RSA encryption with the given public key.
----@param key MM.RSAKey RSA key object
----@param plaintext string Data to encrypt
----@param padding string Padding mode, e.g. `"pkcs1-oaep sha256"`, `"pkcs1-oaep sha256 sha1"`
----@return string? ciphertext Encrypted data, or nil on failure
-function MM.rsaEncrypt(key, plaintext, padding) end
+---RSA encryption (RSAES-OAEP) with the given public key.
+---@param key MM.RSAKey Key table; only `n` and `e` are required
+---@param data string Data to encrypt
+---@param algorithm string `"pkcs1-oaep sha256"` or `"pkcs1-oaep sha512"` (same hash for label and MGF1), or `"pkcs1-oaep sha256 sha1"` (SHA-256 label hash, SHA-1 for MGF1)
+---@return string? encrypted Encrypted data (length = key size), or nil on unknown algorithm or bad key fields
+function MM.rsaEncrypt(key, data, algorithm) end
 
----RSA decryption with the given private key.
----@param key MM.RSAKey RSA key object
----@param ciphertext string Data to decrypt
----@param padding string Padding mode, e.g. `"pkcs1-oaep sha256"`
----@return string? plaintext Decrypted data, or nil on failure
-function MM.rsaDecrypt(key, ciphertext, padding) end
+---RSA decryption (RSAES-OAEP) with the given private key.
+---@param key MM.RSAKey Key table; requires `n`, `e`, `d`, `p`, `q`; CRT fields optional
+---@param encrypted string Data to decrypt
+---@param algorithm string `"pkcs1-oaep sha256"` or `"pkcs1-oaep sha512"` (same hash for label and MGF1)
+---@return string? data Decrypted data, or nil on unknown algorithm, bad key fields, or failed decryption
+function MM.rsaDecrypt(key, encrypted, algorithm) end
 
----Generate an RSA key pair of the specified bit size.
----@param keySize integer Key size in bits (e.g. 2048, 4096)
----@return MM.RSAKey key Generated key pair
-function MM.rsaGenerateKeys(keySize) end
+---Generate an RSA key pair with public exponent 65537.
+---@param bits integer Key size in bits (512 to 4096)
+---@return MM.RSAKey? key Key table, or nil on invalid key size
+function MM.rsaGenerateKeys(bits) end
 
----Compute an RSA signature.
----@param key MM.RSAKey RSA private key
----@param message string Data to sign
----@param padding string Padding/hash mode, e.g. `"pkcs1-v1_5 sha256"`
----@return string? signature Binary signature, or nil on failure
-function MM.rsaSign(key, message, padding) end
+---Compute an RSA signature (RSASSA-PKCS1-v1_5). Data is hashed with SHA-256.
+---@param key MM.RSAKey Key table; requires `n`, `e`, `d`, `p`, `q`; CRT fields optional
+---@param data string Data to sign
+---@param algorithm string `"pkcs1-v1_5 sha256"`
+---@return string? signature Binary signature (length = key size), or nil on unknown algorithm or bad key fields
+function MM.rsaSign(key, data, algorithm) end
 
----Verify an RSA signature.
----@param key MM.RSAKey RSA public key
----@param message string Original data
+---Verify an RSA signature. Counterpart of `MM.rsaSign`.
+---@param key MM.RSAKey Key table; only `n` and `e` are required
+---@param data string Signed data
 ---@param signature string Binary signature to verify
----@param padding string Padding/hash mode, e.g. `"pkcs1-v1_5 sha256"`
----@return boolean valid True if signature is valid
-function MM.rsaVerify(key, message, signature, padding) end
+---@param algorithm string `"pkcs1-v1_5 sha256"`
+---@return boolean valid True if the signature is valid; false also on bad parameters
+function MM.rsaVerify(key, data, signature, algorithm) end
 
----Export an RSA key in PKCS#8 PEM format (public key).
----@param key MM.RSAKey RSA key object
----@return string pem PEM-encoded public key string
+---Export the public part of an RSA key as PEM block
+---(SubjectPublicKeyInfo, `-----BEGIN PUBLIC KEY-----`).
+---@param key MM.RSAKey Key table; only `n` and `e` are required
+---@return string? pem PEM-encoded public key, or nil on bad key fields
 function MM.rsaPkcs8(key) end
 
----Import an RSA public key from PKCS#8 PEM format.
----@param pem string PEM-encoded key string
----@return MM.RSAKey? key Parsed key, or nil on failure
+---Import an RSA public key from a PEM block (`-----BEGIN PUBLIC KEY-----`).
+---Yields only `n` and `e`. Prefer `MM.pkcs8decode` for new extensions.
+---@param pem string PEM-encoded public key
+---@return MM.RSAKey? key Key table with `n` and `e`, or nil on failure
 function MM.rsaPkcs8decode(pem) end
 
----Export an RSA key in PKCS#1 format.
----@param key MM.RSAKey RSA key object
----@return string der PKCS#1 encoded key
-function MM.rsaPkcs1(key) end
+---Import a key from PKCS#8/SubjectPublicKeyInfo format. Accepts PEM
+---(`-----BEGIN PRIVATE KEY-----`/`-----BEGIN PUBLIC KEY-----`, also
+---traditional PEM formats) and binary DER, private or public. The key type
+---(RSA, EC, Ed25519) is detected automatically, so a user-supplied key block
+---can be passed through unchanged. If an EC key lacks the public point, it is
+---derived from the private scalar.
+---@param data string Key in PEM or binary DER format
+---@return (MM.RSAKey|MM.ECKey)? key Key table with `type` field, or nil if the key could not be read
+function MM.pkcs8decode(data) end
+
+---RSA encryption (RSAES-PKCS1-v1_5, legacy) with a raw public key.
+---Unlike the other RSA functions, takes modulus and exponent directly
+---instead of a key table.
+---@param modulus string Public key modulus `n` (binary, big-endian)
+---@param exponent string Public exponent `e` (binary, big-endian)
+---@param data string Data to encrypt
+---@return string? encrypted Encrypted data (length = key size), or nil on invalid parameters or too-long data
+function MM.rsaPkcs1(modulus, exponent, data) end
 
 ---Apply RSA padding to data.
 ---@param data string Data to pad
@@ -265,26 +292,40 @@ function MM.rsaPkcs1(key) end
 ---@return string padded Padded data
 function MM.rsaPad(data, padding, keySize) end
 
----Generate an elliptic curve key pair.
----@param curve string Curve name, e.g. `"prime256v1"`
----@return MM.ECKey key Key object with `.x`, `.y` (public) and `.d` (private) fields
+---Generate an elliptic curve key pair. Typical use: create a device key once
+---during account setup, store it in `LocalStorage`, and sign later logins.
+---@param curve string Curve name, e.g. `"prime256v1"`. `"ed25519"` (case-insensitive) generates an Ed25519 key pair.
+---@return MM.ECKey? key Key table, or nil on unknown curve
 function MM.ecGenerateKeys(curve) end
 
----Compute an ECDSA signature.
----@param key MM.ECKey EC key object
----@param message string Data to sign
----@param algorithm string Signature algorithm, e.g. `"ecdsa sha256"`
----@return string signature Binary DER-encoded signature
-function MM.ecSign(key, message, algorithm) end
+---Compute an EC signature, e.g. for signing API requests or JWTs.
+---With `"ecdsa …"` the data is hashed and the hash is signed (requires
+---`curve`, `x`, `y`, `d`). With `"eddsa"` (PureEdDSA per RFC 8032) the data
+---is signed directly, without hashing (requires `curve` = `"ed25519"` and `d`).
+---@param key MM.ECKey EC key table
+---@param data string Data to sign
+---@param algorithm string `"ecdsa sha256"`, `"ecdsa sha512"`, or `"eddsa"`
+---@return string? signature DER-encoded (ECDSA) or raw 64-byte (EdDSA) signature, or nil on unknown algorithm/curve or bad key fields
+function MM.ecSign(key, data, algorithm) end
 
----Convert binary data to lowercase hexadecimal string.
+---Verify an EC signature. Counterpart of `MM.ecSign`.
+---Only the public key fields are required (ECDSA: `curve`, `x`, `y`;
+---EdDSA: `curve`, `x`); a present private scalar `d` is ignored.
+---@param key MM.ECKey EC key table
+---@param data string Signed data
+---@param signature string Signature to verify (DER for ECDSA, raw 64 bytes for EdDSA)
+---@param algorithm string `"ecdsa sha256"`, `"ecdsa sha512"`, or `"eddsa"`
+---@return boolean valid True if the signature is valid; false also on bad parameters
+function MM.ecVerify(key, data, signature, algorithm) end
+
+---Convert binary data to uppercase hexadecimal string (no separators).
 ---@param data string Binary input
 ---@return string hex Hex string, e.g. `"746573747573"`
 function MM.binToHex(data) end
 
 ---Convert hexadecimal string to binary data.
----@param hex string Hex string (case-insensitive)
----@return string data Binary output
+---@param hex string Hex string (case-insensitive; `:` separators are ignored)
+---@return string? data Binary output, or nil on invalid input
 function MM.hexToBin(hex) end
 
 ---Convert a hex string to an opaque big number object.
@@ -386,16 +427,28 @@ function MM.parseSwiftMt(messageType, content, bankCode, currency) end
 ---@return string? errorMessage Error message if parsing failed
 function MM.parseSepaCamt(content, bankCode, currency) end
 
----Get or calculate a date/time with timezone conversion.
----
----Three calling conventions:
---- 1. `MM.date()` — returns the current POSIX timestamp.
---- 2. `MM.date{year=2024, month=3, day=15, hour=14, from="GMT", to="Europe/Berlin"}` — timezone-aware date construction.
---- 3. `MM.date(timestamp, offset)` — apply a relative offset. Offset format: `"-3Y"` (years), `"-31D"` (days), `"-6M"` (months).
+---Date parts returned by `MM.date(timestamp, "*t")`.
+---@class MM.DateParts
+---@field timestamp MM.Timestamp POSIX timestamp
+---@field year integer
+---@field month integer
+---@field day integer
+---@field isBusinessDay boolean Considers the bank holidays of the bank connection's country
+
+---Date calculations in four forms:
+--- 1. `MM.date()`: the current time as integer POSIX timestamp.
+--- 2. `MM.date(timestamp, offset)`: shift the timestamp by days (`"D"`),
+---    weeks (`"W"`), months (`"M"`), quarters (`"Q"`) or years (`"Y"`),
+---    e.g. `"-30D"` or `"1M"`. Pass nil as `timestamp` for the current time.
+--- 3. `MM.date(timestamp, "*t")`: split the timestamp into an `MM.DateParts` table.
+--- 4. `MM.date{year=2026, month=9, day=3, from="Europe/Berlin"}`: compose a
+---    timestamp from fields. Defaults: today's date, `hour` 12, `min`/`sec` 0.
+---    `from`/`to` are timezone names for conversion.
 ---@overload fun(): MM.Timestamp
----@overload fun(spec: {year: integer, month: integer, day: integer, hour?: integer, min?: integer, sec?: integer, from?: string, to?: string}): MM.Timestamp
----@param timestamp MM.Timestamp Base timestamp
----@param offset string Relative offset string, e.g. `"-3Y"`, `"-31D"`, `"-6M"`
+---@overload fun(timestamp: MM.Timestamp, format: "*t"): MM.DateParts
+---@overload fun(spec: {year?: integer, month?: integer, day?: integer, hour?: integer, min?: integer, sec?: integer, from?: string, to?: string}): MM.Timestamp
+---@param timestamp MM.Timestamp? Base timestamp (nil for the current time)
+---@param offset string Relative offset string, e.g. `"-30D"`, `"1M"`, `"-3Y"`
 ---@return MM.Timestamp timestamp POSIX timestamp
 function MM.date(timestamp, offset) end
 
@@ -410,19 +463,23 @@ function MM.uuid() end
 ---@return integer offset Offset in seconds (e.g. 3600 for CET)
 function MM.gmtOffset(timezone, timestamp) end
 
----Get the system's IANA timezone identifier.
----@return string timezone e.g. `"Europe/Berlin"`
+---Get the user's local IANA timezone name.
+---@return string timezone e.g. `"Europe/Berlin"`; `"GMT"` if the timezone cannot be determined
 function MM.timezone() end
 
 ---Get the length of a UTF-8 string in characters (not bytes).
+---Counts UTF-16 units: characters outside the Basic Multilingual Plane
+---(e.g. emoji) count twice.
 ---@param s string UTF-8 string
 ---@return integer length Character count
 function MM.utf8len(s) end
 
----Extract a UTF-8-aware substring by character indices.
+---Extract a UTF-8-aware substring by character positions.
+---Behaves like `string.sub`: indexing starts at 1, negative positions
+---count from the end of the string.
 ---@param s string UTF-8 string
----@param i integer Start character index (1-based)
----@param j? integer End character index (inclusive). Default: end of string.
+---@param i integer Start character position
+---@param j? integer End character position (inclusive). Default: -1 (end of string).
 ---@return string substring
 function MM.utf8sub(s, i, j) end
 
@@ -468,9 +525,10 @@ function MM.mgf1(seed, hashAlgorithm, length) end
 ---@return boolean isBusinessDay
 function MM.isBusinessDay(timestamp) end
 
----Application build number as string, e.g. `"503"`.
----@type string
-MM.productBuild = ""
+---Application build number, e.g. `503`.
+---As a number, suited for version comparisons.
+---@type number
+MM.productBuild = 0
 
 ---Unique device identifier (short hex), e.g. `"81E37074"`.
 ---@type string
@@ -480,7 +538,10 @@ MM.deviceId = ""
 ---@type string
 MM.deviceName = ""
 
----Full device UUID, e.g. `"81e37074-623e-42d0-b24f-6da495d57ec4"`.
+---Randomly generated, persistently stored device identifier (UUID),
+---e.g. `"81e37074-623e-42d0-b24f-6da495d57ec4"`. Identifies the same device
+---consistently across sessions, e.g. for a device registration with a bank
+---server. `nil` if no identifier has been generated yet.
 ---@type string?
 MM.deviceUuid = nil
 
@@ -500,7 +561,8 @@ MM.osName = ""
 ---@type string
 MM.osVersion = ""
 
----User's system language code, e.g. `"de"`.
+---Language code of the MoneyMoney user interface, e.g. `"de"` or `"en"`.
+---Useful to emit extension error messages in the user's language.
 ---@type string
 MM.language = ""
 
@@ -508,29 +570,48 @@ MM.language = ""
 ---@type string
 MM.webkitLocale = ""
 
----`true` when running a debug/development build.
----@type boolean?
+---Build variant marker: exactly one of `MM.DEBUG`, `MM.BETA`, `MM.RETAIL`,
+---and `MM.APPSTORE` is set (as an empty string); the others are nil.
+---Set for debug/development builds.
+---@type string?
 MM.DEBUG = nil
 
----`true` when running the Mac App Store build.
----@type boolean?
+---Set (as empty string) for the Mac App Store build, nil otherwise.
+---@type string?
 MM.APPSTORE = nil
 
----`true` when running a beta channel build.
----@type boolean?
+---Set (as empty string) for beta channel builds, nil otherwise.
+---@type string?
 MM.BETA = nil
 
--- ── Opaque Types ─────────────────────────────────────────────────────────────
+---Set (as empty string) for the retail (direct download) build, nil otherwise.
+---@type string?
+MM.RETAIL = nil
 
----Opaque RSA key object returned by `MM.rsaGenerateKeys` or `MM.rsaPkcs8decode`.
+-- ── Key and Opaque Types ─────────────────────────────────────────────────────
+
+---RSA key table used by the RSA functions. All key fields are binary strings
+---(big-endian). Returned by `MM.rsaGenerateKeys` and `MM.pkcs8decode`.
 ---@class MM.RSAKey
+---@field type? "rsa" Key type; set by `MM.pkcs8decode`
+---@field n string Modulus
+---@field e string Public exponent
+---@field d? string Private exponent (private keys only)
+---@field p? string First prime factor (private keys only)
+---@field q? string Second prime factor (private keys only)
+---@field dmp1? string CRT exponent `d mod (p-1)` (optional)
+---@field dmq1? string CRT exponent `d mod (q-1)` (optional)
+---@field iqmp? string CRT coefficient `q^-1 mod p` (optional)
 
----Elliptic curve key object returned by `MM.ecGenerateKeys`.
+---Elliptic curve key table used by `MM.ecSign`/`MM.ecVerify`.
+---Returned by `MM.ecGenerateKeys` and `MM.pkcs8decode`.
+---For Ed25519, `x` and `d` are the raw 32-byte public/private keys and `y` is absent.
 ---@class MM.ECKey
----@field curve string Curve name, e.g. `"prime256v1"`
----@field x string Binary public key X coordinate
----@field y string Binary public key Y coordinate
----@field d string Binary private key scalar
+---@field type? "ec"|"ed25519" Key type; set by `MM.pkcs8decode`
+---@field curve string Curve name, e.g. `"prime256v1"` or `"ed25519"`
+---@field x string Binary public key X coordinate (Ed25519: public key)
+---@field y? string Binary public key Y coordinate (ECDSA only)
+---@field d? string Binary private key scalar (private keys only)
 
 ---Opaque big number object for arbitrary-precision arithmetic.
 ---Created by `MM.hexToBigNum()`, consumed by `MM.bigNumToHex()` and arithmetic functions.
@@ -544,9 +625,14 @@ MM.BETA = nil
 ---
 ---For HTTP: `Connection()` creates a standard HTTPS connection.
 ---For WebSocket: `Connection(wsUrl)` or `Connection(wsUrl, protocols, useragent, language)`.
+---
+---All connections within one script run share a cookie store. Cookies are
+---extracted automatically from HTTP headers and `<meta>` tags and deleted
+---after the script ends. Requests use HTTP pipelining and reuse the same
+---HTTPS connection as long as the server is not changed via the URL.
 ---@class MM.Connection
----@field useragent string User-Agent header value. Readable and writable.
----@field language string Accept-Language header value. Readable and writable.
+---@field useragent string User-Agent header value. Readable and writable. Set it to simulate a specific browser or mobile device.
+---@field language string Accept-Language header value. Readable and writable. Default: the operating system language.
 ---@field redirects boolean Whether to follow HTTP redirects automatically. Default: `true`.
 local Connection = {}
 
@@ -560,14 +646,19 @@ local Connection = {}
 ---Send an HTTP request.
 ---
 ---Returns five values. The HTTP status code is **not** returned directly.
+---For JSON-based REST APIs, set the `Accept` header to `"application/json"`:
+---the server response is then returned to the script even on HTTP errors.
+---Otherwise, an HTTP error aborts the script and shows a GUI error message.
+---
+---The return values are ordered so they feed directly into `HTML(...)`.
 ---@param method MM.Conection.RequestMethod HTTP method
----@param url string Absolute or relative URL
+---@param url string Absolute or relative URL. The first request needs an absolute URL; relative URLs resolve against the last requested URL.
 ---@param postContent? string Request body (for POST/PUT/PATCH)
 ---@param postContentType? string Content-Type header, e.g. `"application/json"`
 ---@param headers? table<string, string> Additional HTTP headers
 ---@return string content Response body (binary)
----@return string charset Response character encoding
----@return string mimeType Response MIME type
+---@return string charset Response character encoding, derived from the HTTP headers and HTML `<meta>` tags
+---@return string mimeType Response MIME type, derived from the HTTP headers and HTML `<meta>` tags
 ---@return string filename Content-Disposition filename
 ---@return table<string, string> headers Response headers dictionary
 function Connection:request(method, url, postContent, postContentType, headers) end
@@ -580,7 +671,7 @@ function Connection:request(method, url, postContent, postContentType, headers) 
 function Connection:get(url) end
 
 ---Shorthand for a POST request. Returns `(content, charset, mimeType)`.
----Base signature with additional `headers` parameter.
+---The documented shorthand stops at `postContentType`; `headers` also works.
 ---@param url string Absolute or relative URL
 ---@param postContent string Request body
 ---@param postContentType? string Content-Type header
@@ -640,6 +731,7 @@ local HTML_class = {}
 function HTML_class:xpath(query) end
 
 ---Generate a formatted HTML string (UTF-8 encoded) of this document/element.
+---The output is not necessarily identical to the original HTML code.
 ---@return string html
 function HTML_class:html() end
 
@@ -659,7 +751,7 @@ function HTMLElements:length() end
 
 ---Select the nth element (1-indexed).
 ---@param n integer Element index, starting at 1
----@return MM.HTMLElements element Single-element selection
+---@return MM.HTMLElements element Single-element selection, empty if `n` is out of range
 function HTMLElements:get(n) end
 
 ---Iterate over all elements. The callback receives `(index, element)`.
@@ -675,12 +767,13 @@ function HTMLElements:reverse() end
 ---@return MM.HTMLElements children
 function HTMLElements:children() end
 
----Execute a relative XPath query (must start with `.`).
+---Execute an XPath query relative to the **first** selected element.
+---The query must be relative too, i.e. start with a `.`.
 ---@param query string Relative XPath, e.g. `".//td"`, `"./input[@type='hidden']"`
 ---@return MM.HTMLElements elements
 function HTMLElements:xpath(query) end
 
----Get the combined inner text content of all selected elements.
+---Get the combined text between the tags of all selected elements and their children.
 ---@return string text
 function HTMLElements:text() end
 
@@ -690,24 +783,31 @@ function HTMLElements:text() end
 ---@overload fun(self: MM.HTMLElements, attribute: string, value: string) Set attribute on all elements
 function HTMLElements:attr(attribute) end
 
----Get the value of a form field. Respects `disabled` state and `<select>` option state.
+---Get the value of a form field. The first selected element must be a form field.
+---Unlike `attr("value")`, this respects the `disabled` attribute and evaluates
+---the selected option of a `<select>`.
 ---@return string? value
 function HTMLElements:val() end
 
----Select an `<option>` within a `<select>` element by value.
+---Select an `<option>` within a `<select>` element by value. The first selected
+---element must be the `<select>`. Unlike `attr("selected", "selected")`, this
+---respects the `disabled` attribute and deselects the remaining options.
 ---@param value string Option value to select
 function HTMLElements:select(value) end
 
----Simulate clicking a link (`<a>`) or submit button.
----Returns an HTTP request tuple for `connection:request()`.
+---Simulate clicking a link (`<a href>`), submit button (`<input type="submit">`,
+---`<button>`), or image button (`<input type="image">`).
+---For a link, the linked URL is returned; for a form, the `<input>` values are
+---URL-encoded and either appended to the URL as GET parameters or returned as
+---the POST body. Returns an HTTP request tuple for `connection:request()`.
 ---@return "GET"|"POST" method HTTP method
 ---@return string url Target URL
 ---@return string? postContent POST body (for form submissions)
 ---@return string? postContentType Content-Type
 function HTMLElements:click() end
 
----Submit a form (ignoring submit buttons — uses form action directly).
----Returns an HTTP request tuple for `connection:request()`.
+---Submit a form (`<form>`) without a submit button; the values of submit
+---buttons are ignored. Returns an HTTP request tuple for `connection:request()`.
 ---@return "GET"|"POST" method HTTP method
 ---@return string url Form action URL
 ---@return string? postContent POST body (URL-encoded form data)
@@ -757,6 +857,10 @@ function PDF_class:text() end
 --#region Extension Registration Tables
 
 ---Registration table for WebBanking extensions. Passed to the global `WebBanking{}` call.
+---
+---Labels, count, order, and input rules of the login dialog's credential
+---fields are bank parameters maintained centrally by MoneyMoney per service
+---name; they cannot be set by the extension.
 ---@class MM.WebBankingParams
 ---@field version number Version number of the extension (e.g. `1.15`)
 ---@field description? string Human-readable description
@@ -856,6 +960,10 @@ ProtocolPSD6 = ""
 ---@type MM.ProtocolConst
 ProtocolPSD7 = ""
 
+---Account type constant for `MM.Account.type`.
+---`AccountTypeGiro` through `AccountTypeOther` are the officially documented
+---types; the remaining constants also exist but are not part of the public
+---API description.
 ---@alias MM.AccountTypeConst string
 
 ---Current account / checking account (Girokonto).
@@ -927,7 +1035,9 @@ PaymentTypeB2bDirectDebitBatch = ""
 PaymentTypeForeignCurrencyTransfer = ""
 
 ---Sentinel constant returned from `InitializeSession`/`InitializeSession2` to indicate
----that login credentials were incorrect.
+---that the server rejected the login credentials. MoneyMoney then stops
+---refreshing the affected accounts automatically until the user re-enters the
+---credentials, preventing a server-side password lockout.
 ---@type string
 LoginFailed = ""
 
@@ -951,7 +1061,7 @@ function Connection(wsUrl, protocols, useragent, language) end
 
 ---Create an HTML/XML parser from content.
 ---@param content string HTML/XML document content
----@param charset? string Character encoding. Auto-detected if omitted.
+---@param charset? string Character encoding. Extracted from the `<meta>` tags if omitted.
 ---@param mimeType? string MIME type hint, e.g. `"text/html"`
 ---@return MM.HTML html Parsed document
 function HTML(content, charset, mimeType) end
@@ -1035,11 +1145,20 @@ function MerchantCode(code) end
 
 --#region Persistent Storage
 
----Global persistent key-value store. Values survive across script invocations
----for the same bank connection. Can store strings, numbers, booleans, tables,
----and even Connection objects.
+---Global persistent key-value store, kept per bank connection and restored on
+---the next script run. Typical use: device keys, registration IDs, or session
+---tokens that avoid repeated strong customer authentication.
 ---
----Clear all stored state with `LocalStorage = {}`.
+---Supported value types: numbers, booleans, strings (may contain binary
+---data), and tables (including nested ones). Connection objects are persisted
+---as a special case (last URL, cookies, `useragent`, `language`), so server
+---sessions can survive app restarts. HTML objects are persisted as UTF-8 HTML
+---and re-parsed on load. Functions and other objects (e.g. JSON objects and
+---HTML element lists) are not persisted and read back as nil.
+---
+---Always expect missing values when reading: the store is empty for newly set
+---up bank connections, and single fields may be nil when written by an older
+---script version. Clear all stored state with `LocalStorage = {}`.
 ---@type table<string, any>
 LocalStorage = {}
 
@@ -1048,6 +1167,12 @@ LocalStorage = {}
 --#region Data Structures
 
 ---Account descriptor. Returned by `ListAccounts`, passed to `RefreshAccount` et al.
+---
+---If `type` is absent, MoneyMoney derives the account type from account number
+---and name when the account is created; a 16-character or masked (`x`, `*`)
+---account number counts as a credit card. An explicit value is taken as-is,
+---including `AccountTypeOther`. The type is only set at creation and never
+---changed on refresh.
 ---@class MM.Account
 ---@field name? string Account display name
 ---@field owner? string Account holder name
@@ -1059,7 +1184,7 @@ LocalStorage = {}
 ---@field iban? string IBAN
 ---@field bic? string BIC
 ---@field type? MM.AccountTypeConst Account type constant
----@field comment? string Free-text comment
+---@field comment? string Free-text comment. Only set by MoneyMoney on accounts passed to the extension; not read from accounts the extension returns.
 ---@field bank? {bankCode: string} Bank reference when passed back from MoneyMoney
 
 ---Transaction descriptor. Element of `RefreshAccountResponse.transactions`.
@@ -1072,8 +1197,8 @@ LocalStorage = {}
 ---@field bookingDate MM.Timestamp Booking date
 ---@field valueDate? MM.Timestamp Value date
 ---@field purpose? string Payment reference / memo. Multiline via `"\n"`.
----@field transactionCode? integer ISO 20022 business transaction code
----@field textKeyExtension? integer Text key extension (FinTS-specific)
+---@field transactionCode? integer Business transaction code (Geschäftsvorfallcode), the numeric German text key
+---@field textKeyExtension? integer Text key extension (Textschlüsselergänzung, FinTS-specific)
 ---@field purposeCode? string SEPA purpose code (e.g. `"SALA"`)
 ---@field bookingKey? string SWIFT booking key
 ---@field bookingText? string Transaction type description (e.g. `"Lastschrift"`)
@@ -1086,7 +1211,7 @@ LocalStorage = {}
 ---@field booked? boolean `true` for booked, `false` for pending. Default: `true`.
 ---@field category? string Category assignment hint
 ---@field comment? string Free-text comment
----@field transactionId? string Unique transaction identifier (for `isKnownTransactionId`)
+---@field transactionId? string Transaction identifier for `MM.IsKnownTransactionId` lookups. Kept for booked transactions only; must be unique within the account for lookups to succeed.
 ---@field prettyPrint? boolean If `false`, skip automatic formatting
 ---@field timezone? string Timezone, e.g. `"GMT"`, `"Europe/Berlin"`
 ---@field ultimateName? string Ultimate debtor/creditor name (SEPA)
@@ -1098,11 +1223,11 @@ LocalStorage = {}
 ---@field securityNumber? string WKN (German securities identification number)
 ---@field quantity? number Number of shares or nominal amount
 ---@field currencyOfQuantity? string Currency if `quantity` is nominal; `nil` for share count
----@field purchasePrice? number Purchase price per unit
----@field currencyOfPurchasePrice? string Purchase price currency
+---@field purchasePrice? number Purchase price or purchase quote
+---@field currencyOfPurchasePrice? string Purchase price currency, if it differs from the account currency
 ---@field exchangeRateOfPurchasePrice? number Exchange rate at purchase time
----@field price? number Current price per unit
----@field currencyOfPrice? string Current price currency
+---@field price? number Current price or quote
+---@field currencyOfPrice? string Current price currency, if it differs from the account currency
 ---@field exchangeRateOfPrice? number Current exchange rate
 ---@field amount? number Position value in account currency
 ---@field originalAmount? number Position value in original/foreign currency
@@ -1112,19 +1237,19 @@ LocalStorage = {}
 
 ---Response from `RefreshAccount`.
 ---
----When both `balance` and `balances` are present, `balances` takes priority for multi-currency
----display. The `balance` field is still read but `balances` provides the authoritative values.
----Same precedence applies to `pendingBalance` vs `pendingBalances`.
+---Portfolios are expected to return only `securities`; all other accounts
+---`balance` (or `balances`) and `transactions`. Missing or nil values produce
+---a GUI error message.
 ---@class MM.RefreshAccountResponse
----@field balance? number Account balance in default currency
----@field balances? {[1]: number, [2]: string}[] Multi-currency balances as `{amount, currencyCode}` tuples. Takes priority over `balance`.
----@field pendingBalance? number Pending balance in default currency
----@field pendingBalances? {[1]: number, [2]: string}[] Multi-currency pending balances as `{amount, currencyCode}` tuples. Takes priority over `pendingBalance`.
----@field transactions? MM.Transaction[] Transactions, newest first
+---@field balance? number Account balance
+---@field balances? {[1]: number, [2]: string}[] Balances as `{amount, currency}` tuples. Should only be returned instead of `balance` when the account holds balances in multiple currencies.
+---@field pendingBalance? number Sum of pending transactions
+---@field pendingBalances? {[1]: number, [2]: string}[] Multi-currency pending balances as `{amount, currency}` tuples, analogous to `balances`
+---@field transactions? MM.Transaction[] Transactions ordered by booking date, newest first. Each needs at least `amount` and `bookingDate`. Transactions already in the database are dropped as duplicates.
 ---@field securities? MM.Security[] Portfolio positions
 ---@field payments? MM.ScheduledPayment[] Scheduled/standing payments (convenience shortcut; dedicated `FetchScheduledPayments` callback is the standard path)
 ---@field statements? MM.Statement[] PDF bank statements (convenience shortcut; dedicated `FetchStatements` callback is the standard path)
----@field bonusPoints? number Loyalty/bonus points balance
+---@field bonusPoints? number Number of points in a bonus program
 ---@field paymentTypes? MM.PaymentTypeConst[] Payment types supported by this account
 
 ---SEPA direct debit sequence type.
@@ -1207,19 +1332,21 @@ LocalStorage = {}
 ---| "statement"  # PDF statement fetching
 ---| "tan media"  # TAN media management
 
----Login credentials passed on step 1. Positional array of login fields,
----typically `{username, password}`. Password is always the last element.
+---Login credentials passed on step 1: the values of the login dialog's input
+---fields in display order: username, optional second and third field (e.g.
+---customer number or API secret), password last. Fields the bank connection
+---does not have are omitted from the array.
 ---@class MM.LoginCredentials
----@field [1] string Username
----@field [2] string Password (or intermediate field if more than 2 fields)
----@field [3]? string Password (when 3 or more fields)
----@field [4]? string Password (when 4 fields)
+---@field [1] string Username (first input field)
+---@field [2] string Second field, or password when there are only two fields
+---@field [3]? string Third field, or password (when three fields)
+---@field [4]? string Password (when four fields)
 
----TAN/SCA response passed on step 2+, after the user entered a TAN or completed a challenge.
+---Response passed on follow-up calls after a 2FA challenge.
 ---@class MM.TanCredentials
----@field [1] string TAN value entered by user, or `""` if cancelled/empty
----@field [2] string Cancel message
----@field [3] boolean `true` if this is a decoupled polling re-call
+---@field [1] string User's answer to the previous challenge: the entered text, a captcha solution token, the `code` parameter of a browser approval redirect, or `""` for decoupled methods
+---@field [2] string Localized cancel message the extension should return when polling has to end unsuccessfully
+---@field [3] boolean `true` while another polling attempt is allowed. MoneyMoney controls the number of attempts; the extension should not implement its own time limit.
 
 ---Credentials argument for `InitializeSession2`. Contents depend on context:
 ---  - **Step 1** (login): `MM.LoginCredentials` — login fields
@@ -1252,26 +1379,39 @@ LocalStorage = {}
 ---@field api? string API identifier — pushed as Lua global `api`
 ---@field since? MM.Timestamp Unix timestamp; sets the lower bound for the "fetch transactions since" date picker in account setup
 
----TAN challenge data. MoneyMoney auto-detects the content type
----(image, flicker code, URL, or plain text) and displays it accordingly.
+---Callback passed by MoneyMoney as the 3rd argument to `RefreshAccount`.
+---Looks up a previously stored transaction by its `transactionId`.
+---Returns the stored transaction only when exactly one booked transaction of
+---the account carries the identifier; nil otherwise, i.e., also for unknown,
+---duplicated, or pending identifiers. The returned table holds the stored
+---transaction fields, but not the `transactionId` itself.
+---@alias MM.IsKnownTransactionId fun(transactionId: string): MM.Transaction?
+
+---TAN challenge data. MoneyMoney auto-detects the content type and displays
+---it accordingly: plain text, PNG/JPEG image data, a URL (browser approval,
+---or QR code with `tanMethod.name = MM.localizeText("QR Code")`), chipTAN
+---data (QR code, flicker code), or the script URL of a supported captcha
+---provider (Google reCAPTCHA, hCaptcha, FriendlyCaptcha, Amazon WAF) with
+---`sitekey`, optional `type=checkbox`, and `referer` query parameters.
 ---@alias MM.ChallengeData string
 
----2FA challenge returned by `InitializeSession2` and `RefreshAccount`.
+---2FA challenge returned by `InitializeSession2`, `RefreshAccount`, and `FetchStatements`.
 ---
----Fields are interpreted in priority order: `tanMethods` triggers a method selection
----dialog, `challenge`/`label` triggers a TAN entry dialog, and `appToApp`/`state`
----triggers an OAuth redirect.
+---At least one of `challenge`, `label`, `tanMethod`, or `tanMethods` must be
+---set, otherwise the table is not recognized as a challenge. When `tanMethods`
+---is present, a selection dialog is shown and `challenge`, `label`, and
+---`tanMethod` are ignored.
 ---@class MM.SessionChallenge
----@field challenge? MM.ChallengeData Challenge data, auto-classified by content
----@field label? string Input field label. Alone (no challenge/poll) still triggers a TAN input dialog.
----@field tanMethods? MM.TanMethod[] TAN method selection — takes priority over all other fields when present
----@field tanMethod? MM.TanMethod Override current TAN method for this step. Properties (isNumeric, minLength, etc.) copied to challenge input.
----@field title? string Dialog window title. Auto-generated from TAN method + bank name if absent.
----@field poll? boolean Enable polling: MoneyMoney re-calls with same step and `credentials[3]=true`. With tanMethods: marks methods as polling-capable.
----@field startCode? string Reference number displayed alongside the challenge in the TAN entry dialog
----@field button? string `"next"` shows a "Next" button instead of "OK" (for multi-step QR flows)
----@field appToApp? string App name for app-redirect, or `https://` URL for OAuth.
----@field state? string OAuth state parameter, passed with appToApp URL for callback verification
+---@field challenge? MM.ChallengeData The challenge itself: a text, PNG/JPEG image data, a URL (`https://…`), or chipTAN data (QR code, flicker code). Display is auto-detected from the content; HTML tags in a text are stripped.
+---@field label? string Input field label, e.g. `"TAN"` or `"Code"`. Without `label`, the dialog shows no input field.
+---@field tanMethods? MM.TanMethod[] TAN methods for the user to choose from first. The chosen method's table is passed in `credentials[1]` on the next call.
+---@field tanMethod? MM.TanMethod TAN method used for this challenge. Determines input length and charset as well as the texts generated by MoneyMoney.
+---@field title? string Instruction text above the challenge. Default: generated by MoneyMoney to match TAN method and session context.
+---@field poll? boolean `true` for decoupled methods (approval in a banking app): the extension polls the status instead of waiting for input. Only effective when no `label` is given. Combined with `tanMethods`, the selection dialog also waits for approval via the first app method of the list.
+---@field startCode? string Start code of a chipTAN method. Inserted into the instruction text generated by MoneyMoney.
+---@field button? string `"next"` shows a "Next" button instead of "OK" when another challenge follows
+---@field appToApp? string Name of a banking app. A URL in `challenge` is then shown as a QR code (which the user scans to launch the app) instead of being opened in the browser.
+---@field state? string The `state` parameter of an OAuth URL in `challenge`. If absent, MoneyMoney reads it from the URL or appends a random value itself.
 
 ---TAN method name. Controls which UI MoneyMoney shows for the TAN challenge.
 ---
@@ -1289,34 +1429,39 @@ LocalStorage = {}
 ---| "chipTAN QR"         # QR-based chipTAN
 ---| "chipTAN photo"      # Photo-based chipTAN
 ---| "photoTAN"           # photoTAN image (user reads code from image)
+---| "photoTAN push"      # Decoupled photoTAN app approval
 ---| "pushTAN"            # Decoupled app approval (also: `appTAN`, `BestSign`, `SecureGo plus`, `easyTAN`, `SealOne`)
 
----TAN method descriptor. Returned by `GetTanMethods` or within `MM.SessionChallenge.tanMethods`.
----
----The `hbciMethod` field is opaque — stored and passed back.
+---TAN method descriptor. Passed to MoneyMoney in the `tanMethod`/`tanMethods`
+---fields of a challenge (or returned by `GetTanMethods`), and passed back to
+---the extension in `credentials[1]` after the user's selection. The TAN
+---methods of a FinTS/HBCI connection (`hbciTanMethods`) share this structure.
 ---@class MM.TanMethod
----@field name MM.TanMethodName Display name — **required**, entry skipped if nil. Controls UI type.
----@field hbciMethod? string Opaque identifier passed back in callbacks (conventionally FinTS codes like `"700"`, `"901"`)
+---@field name MM.TanMethodName Display name, **required**: the entry is skipped if nil. For app methods known to MoneyMoney (e.g. `"pushTAN"`, `"appTAN"`, `"photoTAN push"`) and for `MM.localizeText("QR Code")`, MoneyMoney generates matching dialog texts.
+---@field hbciMethod? string Method identifier, usually three digits as in FinTS (e.g. `"700"`). MoneyMoney remembers the user's selection by this identifier and preselects it next time.
 ---@field webMethod? string Extension-specific identifier
----@field mediumName? string Device/medium description, e.g. `"+49***123"` or "iPhone". Displayed next to the `name` in the selection dialog UI.
----@field errorMessage? string If set, method is disabled in UI — selecting it shows this error
----@field isPreferred? boolean Mark as preferred/default method
----@field isNumeric? boolean Numeric-only input (default: true)
----@field isUppercase? boolean Uppercase input
----@field tanLength? integer Expected TAN length (default: 6)
----@field minLength? integer Minimum input length
----@field maxLength? integer Maximum input length
+---@field mediumName? string TAN medium description, e.g. a masked phone number or a device name. Displayed next to the `name` in the selection dialog.
+---@field errorMessage? string If set, the method is shown in the selection dialog but not selectable; the message explains the reason.
+---@field isPreferred? boolean Preselect this method in the selection dialog
+---@field isNumeric? boolean Numeric-only input (default: true). If false, letters are allowed and input is uppercased unless `isUppercase` is false.
+---@field isUppercase? boolean Convert input to uppercase
+---@field tanLength? integer Fixed input length (default: 6)
+---@field minLength? integer Minimum input length, alternative to `tanLength`
+---@field maxLength? integer Maximum input length, alternative to `tanLength`
+---@field label? string Only in tables passed by MoneyMoney: input field label derived from the name, e.g. `"TAN"`. May be reused as the challenge's `label`.
 
 ---@class MM.FetchStatementsResponse
----@field statements MM.Statement[]
+---@field statements MM.Statement[] Documents, ordered with the newest first
 
----A single PDF bank statement.
+---A single document fetched by `FetchStatements`.
 ---@class MM.Statement
----@field account MM.Account The account this statement belongs to
----@field creationDate MM.Timestamp Statement date
----@field identifier string|table Unique identifier (used in `knownIdentifiers` to deduplicate)
----@field filename string Suggested filename for the PDF
----@field pdf string Binary PDF data
+---@field pdf string Binary PDF data, the only required field. May also be a ZIP archive; contained PDF files are unpacked automatically.
+---@field identifier? string|table Unique identifier, e.g. a server-side document ID. Lets MoneyMoney recognize already fetched documents (see `knownIdentifiers`). Documented as string; tables also work.
+---@field name? string Display name of the document
+---@field filename? string Suggested filename for the document
+---@field creationDate? MM.Timestamp Creation date
+---@field timezone? string Timezone in which `creationDate` is to be interpreted, e.g. `"Europe/Berlin"`
+---@field account? MM.Account Account to assign the document to (from the `accounts` parameter of `FetchStatements`). Default: the current account.
 
 ---@class MM.FetchScheduledPaymentsResponse
 ---@field payments MM.ScheduledPayment[]
@@ -1355,7 +1500,7 @@ LocalStorage = {}
 ---local M = {}
 ---
 ---function M.SupportsBank(protocol, bankCode) ... end
----function M.InitializeSession(protocol, bankCode, username, reserved, password) ... end
+---function M.InitializeSession(protocol, bankCode, username, customer, password) ... end
 ---function M.ListAccounts(knownAccounts) ... end
 ---function M.RefreshAccount(account, since) ... end
 ---function M.EndSession() ... end
@@ -1372,17 +1517,17 @@ LocalStorage = {}
 ---All other fields are optional.
 ---@class MM.WebBankingExtension
 --- Required ────────────────────────────────────────────────────────────────────
----@field SupportsBank fun(protocol: MM.ProtocolConst, bankCode: string, fetchStatements?: boolean, fetchScheduledPayments?: boolean, isPaymentSession?: boolean): boolean|string|MM.SupportsBankResponse Determine whether this extension handles a given bank connection.
----@field ListAccounts fun(knownAccounts: MM.Account[]): MM.Account[]|MM.ErrorMessage List all accounts available for scraping.
----@field RefreshAccount fun(account: MM.Account, since?: MM.Timestamp, isKnownTransactionId?: fun(id: string): {bookingDate: number, amount: number}?, step?: integer, credentials?: MM.TanCredentials|MM.TanMethod[]): MM.RefreshAccountResponse|MM.ErrorMessage|MM.SessionChallenge Fetch balance, transactions, and/or securities for one account.
+---@field SupportsBank fun(protocol: MM.ProtocolConst, bankCode: string, fetchStatements?: boolean, fetchScheduledPayments?: boolean, isPaymentSession?: boolean): boolean|string|MM.SupportsBankResponse Determine whether this extension handles a given bank connection. `bankCode` is the bank code or service name. Instead of `true`, the URL of the online banking entry page may be returned.
+---@field ListAccounts fun(knownAccounts: MM.Account[]): MM.Account[]|MM.ErrorMessage List all accounts available for scraping. Accounts without an `accountNumber` are ignored. `knownAccounts` is only populated when the extension supplements a FinTS/HBCI bank connection; it lists the accounts that need not be scraped anymore.
+---@field RefreshAccount fun(account: MM.Account, since?: MM.Timestamp, isKnownTransactionId?: MM.IsKnownTransactionId, step?: integer, credentials?: MM.TanCredentials|MM.TanMethod[]): MM.RefreshAccountResponse|MM.ErrorMessage|MM.SessionChallenge Fetch balance and transactions, or securities for one account. `since` is the booking day to deliver transactions from (older ones may be omitted); it is nil for portfolios.
 ---@field EndSession fun(): nil|MM.ErrorMessage Perform logout / cleanup.
 --- Login — implement exactly one ───────────────────────────────────────────────
----@field InitializeSession? fun(protocol: MM.ProtocolConst, bankCode: string, username: string, reserved: string, password: string): nil|MM.ErrorMessage Simple single-step login. Legacy — prefer `InitializeSession2`.
----@field InitializeSession2? fun(protocol: MM.ProtocolConst, bankCode: string, step: integer, credentials: MM.Credentials, interactive: boolean, tanMethods?: MM.TanMethod[], session?: MM.SessionType): nil|MM.ErrorMessage|MM.SessionChallenge Login with two-factor authentication support.
+---@field InitializeSession? fun(protocol: MM.ProtocolConst, bankCode: string, username: string, customer: string, password: string, credential?: string): nil|MM.ErrorMessage Simple single-step login. `bankCode` is the bank code or service name; `customer` and `credential` hold the second and third login dialog field (empty if the bank connection has none). Prefer `InitializeSession2`.
+---@field InitializeSession2? fun(protocol: MM.ProtocolConst, bankCode: string, step: integer, credentials: MM.Credentials, interactive: boolean, hbciTanMethods?: MM.TanMethod[], session?: MM.SessionType): nil|MM.ErrorMessage|MM.SessionChallenge Login with two-factor authentication: called repeatedly with increasing `step` after each challenge until it returns nil, `LoginFailed`, or an error message. `step` increases by 2 when a challenge sets `tanMethod` directly, and stays unchanged while polling, so do not rely on exact values. `interactive` is false for background refreshes, where MoneyMoney cannot show dialogs. `hbciTanMethods` is only populated for `ProtocolFinTS`, otherwise an empty array.
 --- Optional ────────────────────────────────────────────────────────────────────
 ---@field GetTanMethods? fun(account: MM.Account): MM.TanMethod[] Return available TAN/SCA methods. Called before `InitializeSession2`.
 ---@field MapAccount? fun(account: MM.Account): MM.Account Map/transform an account returned by `ListAccounts`.
----@field FetchStatements? fun(accounts: MM.Account[], knownIdentifiers: table<string, boolean>, step?: integer, credentials?: string[], interactive?: boolean): MM.FetchStatementsResponse|MM.ErrorMessage Fetch PDF bank statements.
+---@field FetchStatements? fun(accounts: MM.Account[], knownIdentifiers: table<string, boolean>, step?: integer, credentials?: MM.TanCredentials, interactive?: boolean): MM.FetchStatementsResponse|MM.SessionChallenge|MM.ErrorMessage Fetch PDF statements and other mailbox documents. Called once with all affected accounts (not per account). Documents whose `identifier` is a key of `knownIdentifiers` were fetched before and can be skipped. May return a 2FA challenge like `InitializeSession2`; it is then called again with increased `step`.
 ---@field FetchScheduledPayments? fun(account: MM.Account): MM.FetchScheduledPaymentsResponse|MM.ErrorMessage Fetch scheduled/standing payments.
 ---@field SubmitPayment? fun(step: integer, account: MM.Account, payment: MM.Payment, tanMethod?: MM.TanMethod, credentials?: MM.Credentials): MM.SubmitPaymentResult Submit a payment; supports multi-step 2FA flows. Must return table or error string.
 

@@ -82,8 +82,14 @@ MM = {
   end,
   printStatus = function() end,
   printDebug = function(...)
-    io.stderr:write(tostring(...) .. "\n")
+    -- Like `print`: all values via `tostring`, tab-separated
+    local parts = {}
+    for i = 1, select("#", ...) do
+      parts[i] = tostring(select(i, ...))
+    end
+    io.stderr:write(table.concat(parts, "\t") .. "\n")
   end,
+  ---Implements the `"UTF-8"` behavior; the charset parameter is ignored.
   ---@param s string
   ---@param _charset? string
   ---@return string
@@ -215,7 +221,15 @@ do
 
       local body = stream:get_body_as_string()
 
-      return body, "UTF-8", "application/json", "", respHeaders
+      -- MoneyMoney returns a plain name-value table; drop HTTP/2 pseudo headers
+      local responseHeaders = {}
+      for name, value in respHeaders:each() do
+        if not name:find("^:") then
+          responseHeaders[name] = value
+        end
+      end
+
+      return body, "UTF-8", "application/json", "", responseHeaders
     end
 
     return conn

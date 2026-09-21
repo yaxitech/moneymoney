@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- The MoneyMoney API type definitions (`addons/moneymoney/library/mm.lua`) now follow the official web banking API documentation.
+
 ## [0.3] - 2026-07-21
 
 ### Changed
