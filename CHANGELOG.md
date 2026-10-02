@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- An expired YAXI API key now shows a clear message with instructions instead of a technical error.
 - Optical chipTAN (flicker code) challenges now work: the flicker data is passed to MoneyMoney instead of being dropped, e.g., for DKB "chipTAN optisch" and GLS "Sm@rtTAN optisch".
 - Text input in TAN dialogs is no longer forced to uppercase and no longer restricted to exactly 6 characters when the bank does not specify a length.
 - The chipTAN start code is now extracted right after the "Start-Code" keyword, so a reference number elsewhere in the message can no longer be shown as the start code.

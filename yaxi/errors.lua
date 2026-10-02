@@ -11,6 +11,8 @@ local CanceledError = rc.CanceledError
 local UnauthorizedError = rc.UnauthorizedError
 local InterruptError = rc.InterruptError
 local AccessExceededError = rc.AccessExceededError
+local TicketError = rc.TicketError
+local TicketErrorCode = rc.TicketErrorCode
 
 local traces = require("yaxi.traces")
 
@@ -50,6 +52,15 @@ function M.errorHandler(session, err)
     -- `connectionData` and skip the trace; a manual (interactive) refresh is
     -- not rate-limited.
     return "The automatic refresh limit has been reached. Please refresh the account manually in MoneyMoney."
+  end
+
+  if
+    yaxiErr:isInstanceOf(TicketError)
+    and (yaxiErr --[[@as YAXI.RoutexClient.Error.Ticket]]).code == TicketErrorCode.ExpiredKey
+  then
+    -- Skip the trace: fetching it would sign with the same expired key
+    return "Your YAXI API key has expired. "
+      .. "Please create a new key at https://hub.yaxi.tech and update yaxi-config.json."
   end
 
   -- Save trace for debugging (before early returns so trace is always captured)

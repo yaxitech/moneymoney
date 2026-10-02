@@ -60,6 +60,13 @@ context("yaxi.errors", function()
       assert.are_equal("ServerError: internal error", result)
     end)
 
+    test("explains an expired API key", function()
+      local err = rc.TicketError:new("ExpiredKey", "Expired key")
+      local result = errors.errorHandler(nil, err)
+      assert.is_truthy(result:find("API key has expired", 1, true))
+      assert.is_truthy(result:find("hub.yaxi.tech", 1, true))
+    end)
+
     test("clears connectionData for UnauthorizedError", function()
       local conn = { id = "test-conn", service = "TestBank" }
       LocalStorage["test-conn"] = "stale-data" --[[@as any]]
