@@ -27,7 +27,8 @@ local YAXI_API_URL = "https://api.yaxi.tech"
 ---@field balance number Primary balance amount
 ---@field pendingBalance number? Pending balance amount
 
----@alias YAXI.MoneyMoney.Session.BalancesCache table<string, YAXI.MoneyMoney.Session.BalanceEntry>
+---`false` marks an account the bank's balances response did not deliver.
+---@alias YAXI.MoneyMoney.Session.BalancesCache table<string, YAXI.MoneyMoney.Session.BalanceEntry|false>
 ---@alias YAXI.MoneyMoney.Session.TransactionsCache table<string, MM.Transaction[]>
 
 ---@class YAXI.MoneyMoney.Session

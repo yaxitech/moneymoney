@@ -204,7 +204,8 @@ end
 ---@param accountName string?
 ---@return MM.SessionChallenge?
 local function fetchBalances(sess, iban, currency, accountName)
-  if sess.balancesCache and sess.balancesCache[iban] then
+  -- `false` marks an account the bank did not deliver; do not re-fetch it
+  if sess.balancesCache and sess.balancesCache[iban] ~= nil then
     return nil
   end
   MM.printStatus(string.format("Fetching balances for %s…", accountName or iban))

@@ -185,6 +185,18 @@ context("yaxi.mapping.balance", function()
       assert.is_nil(result.pendingBalance)
     end)
 
+    test("keeps a balance stamped slightly ahead of the local clock", function()
+      -- Current-state balances carry the retrieval time; a client clock
+      -- running a few seconds behind must not fall back to a stale entry.
+      local aheadNow = os.date("!%Y-%m-%dT%H:%M:%S.500000000Z", os.time() + 2)
+      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
+      local result = balanceMapping.pickBalance({
+        { balanceType = "Booked", amount = "1000.00", currency = "EUR", dateTime = "2026-01-15T00:00:00.000000000Z" },
+        { balanceType = "Available", amount = "8877.78", currency = "EUR", dateTime = aheadNow },
+      })
+      assert.are_equal(8877.78, result.balance)
+    end)
+
     test("falls back to the type scan when no entry carries a dateTime", function()
       -- Without any dateTime the guideline cannot apply, so the Booked > Available type
       -- priority still selects the primary.

@@ -32,15 +32,19 @@ end
 function M.cacheBalances(sess, balancesData)
   assert(balancesData, "No balances data")
 
+  sess.balancesCache = sess.balancesCache or {}
+
   ---@type YAXI.RoutexClient.AccountReference[]?
   local missingAccounts = balancesData.missingAccounts
   if missingAccounts then
     for _, missing in ipairs(missingAccounts) do
       log:warn("Missing account in balances response: %s", missing.iban)
+      -- Negative marker: attempted but not delivered, so not re-fetched
+      if missing.iban then
+        sess.balancesCache[missing.iban] = false
+      end
     end
   end
-
-  sess.balancesCache = sess.balancesCache or {}
   for _, payload in ipairs(balancesData.balances or {}) do
     ---@type string?
     local iban = payload.account and payload.account.iban
@@ -79,8 +83,8 @@ end
 function M.buildRefreshResponse(sess, iban, paymentTypes)
   local balanceResult = sess.balancesCache and sess.balancesCache[iban]
   if not balanceResult then
-    log:warn("No cached balance for %s, defaulting to 0", iban)
-    balanceResult = { balance = 0 }
+    -- A fabricated zero balance would silently show the account as empty
+    error(string.format("The bank did not provide a balance for account %s.", iban), 0)
   end
 
   local transactions = sess.transactionsCache and sess.transactionsCache[iban] or {}

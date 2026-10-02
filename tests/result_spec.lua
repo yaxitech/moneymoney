@@ -89,6 +89,7 @@ context("yaxi.result", function()
             },
           },
         },
+        missingAccounts = { { iban = "DE89370400440532013000" } },
       }
       local token = encodeResultJWT(balancesData)
       local sess = mockSession()
@@ -101,6 +102,8 @@ context("yaxi.result", function()
       assert.is_not_nil(cached)
       assert.are_equal(12500.00, cached.balance)
       assert.are_equal(-500.00, cached.pendingBalance)
+      -- Missing accounts get a negative marker so they are not re-fetched
+      assert.is_false(sess.balancesCache["DE89370400440532013000"])
     end)
 
     test("handles multiple accounts", function()
@@ -186,15 +189,15 @@ context("yaxi.result", function()
       assert.are_same({ PaymentTypeTransfer }, response.paymentTypes)
     end)
 
-    test("defaults to balance=0 when no cached balance", function()
+    test("errors when the bank delivered no balance", function()
       local sess = mockSession()
       sess.balancesCache = {}
       sess.transactionsCache = { [DEMO_IBAN] = {} }
 
-      local response = result.buildRefreshResponse(sess, DEMO_IBAN)
+      local ok, err = pcall(result.buildRefreshResponse, sess, DEMO_IBAN)
 
-      assert.are_equal(0, response.balance)
-      assert.is_nil(response.pendingBalance)
+      assert.is_false(ok)
+      assert.are_equal("The bank did not provide a balance for account " .. DEMO_IBAN .. ".", err)
     end)
 
     test("defaults to empty transactions when no cache", function()

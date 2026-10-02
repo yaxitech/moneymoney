@@ -5,6 +5,11 @@ local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogge
 
 local M = {}
 
+---Tolerance for the future-balance cutoff: current-state balances carry the
+---retrieval time, so a slightly trailing local clock must not classify them
+---as future. Value-dated future balances stay excluded.
+local CLOCK_SKEW_TOLERANCE_SECS = 300
+
 ---Whether `entry` should replace the current `best` pick of a bucket: true when there
 ---is no pick yet, or when both carry a `dateTime` and `entry`'s is strictly more recent.
 ---ISO 8601 date-times compare lexicographically. When recency is indeterminate (either
@@ -80,7 +85,7 @@ end
 ---`Available` without a credit line and valid at `now`, preferring `Booked` on an
 ---equal `dateTime`.
 ---@param balanceEntries YAXI.RoutexClient.Result.Balances.Payload.Entry[]?
----@param now? string Current time as an ISO 8601 date-time; defaults to now (UTC).
+---@param now? string Current time as an ISO 8601 date-time; defaults to now (UTC) plus a clock-skew tolerance.
 ---@return YAXI.MoneyMoney.Session.BalanceEntry
 function M.pickBalance(balanceEntries, now)
   if not balanceEntries or #balanceEntries == 0 then
@@ -89,7 +94,8 @@ function M.pickBalance(balanceEntries, now)
   end
 
   -- Fall back to a type scan, exhausting credit-line-free entries ({ false, true }) first.
-  local primary = pickFreshest(balanceEntries, now or os.date("!%Y-%m-%dT%H:%M:%SZ") --[[@as string]])
+  now = now or os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() + CLOCK_SKEW_TOLERANCE_SECS) --[[@as string]]
+  local primary = pickFreshest(balanceEntries, now)
     or findEntry(balanceEntries, { "Booked", "Expected", "Available" }, { false, true })
   if not primary then
     log:warn("No balance entry with parseable amount, defaulting to 0")
