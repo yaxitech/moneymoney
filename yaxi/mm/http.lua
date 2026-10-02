@@ -8,6 +8,7 @@ local RoutexClient = rc.RoutexClient
 --region MMHttpClient
 
 ---@class MMHttpClient: YAXI.Http.IClient
+---@field private _connection MM.Connection?
 local MMHttpClient = {}
 MMHttpClient.__index = MMHttpClient
 setmetatable(MMHttpClient, { __index = http.IHttpClient })
@@ -20,53 +21,56 @@ function MMHttpClient:new(version)
 end
 
 function MMHttpClient:request(request)
-  local userAgent = ("RoutexClientMoneyMoney/%s (Lua)"):format(self.version)
-  local connection = Connection(nil, nil, userAgent)
-
-  if request.headers and request.headers["content-type"] == "application/json" then
-    -- MoneyMoney's `Connection()` handler requires `Accept` (capital `A`) to include
-    -- `application/json` when `content-type` is `application/json`, otherwise it aborts
-    -- script execution and escapes to the frontend without giving us a chance to handle
-    -- errors. Since HTTP header names are case-insensitive per RFC 7230, we merge the
-    -- lowercase `accept` into the capitalized `Accept` and include `application/json`.
-    local parts = {}
-    ---@diagnostic disable-next-line: unnecessary-if
-    if request.headers.accept then
-      parts[#parts + 1] = request.headers.accept
-    end
-    ---@diagnostic disable-next-line: unnecessary-if
-    if request.headers.Accept then
-      parts[#parts + 1] = request.headers.Accept
-    end
-    local accept = table.concat(parts, ", ")
-    if accept and not accept:find("application/json") then
-      request.headers.Accept = string.format("%s, %s", accept, "application/json")
-      request.headers.accept = nil
-    end
+  -- The `Connection` object owns the pooled HTTPS connection; reuse it to
+  -- avoid a TLS handshake per request. The constructor arguments only apply
+  -- to WebSocket connections, so set the user agent via the attribute.
+  if not self._connection then
+    self._connection = Connection()
+    self._connection.useragent = ("RoutexClientMoneyMoney/%s (Lua)"):format(self.version)
   end
+  local connection = self._connection
 
-  local content, _charset, _mime_type, _filename, headers = connection:request(
-    request.method,
-    request.url,
-    request.data or "",
-    request.headers and request.headers["content-type"] or "",
-    request.headers or {}
-  )
+  -- MoneyMoney only returns HTTP error responses to the script when the
+  -- request carries a recognized capitalized `Accept` header; otherwise an
+  -- HTTP error aborts the whole session. Always send a single such header.
+  local headers = request.headers or {}
+  local parts = {}
+  for _, key in ipairs({ "accept", "Accept" }) do
+    if headers[key] and headers[key] ~= "" then
+      parts[#parts + 1] = headers[key]
+    end
+    headers[key] = nil
+  end
+  local accept = table.concat(parts, ", ")
+  if accept == "" then
+    accept = "application/json"
+  elseif not accept:find("application/json", 1, true) then
+    accept = accept .. ", application/json"
+  end
+  headers.Accept = accept
+  -- A `user-agent` header would override `connection.useragent`
+  headers["user-agent"] = nil
+  request.headers = headers
+
+  local content, _charset, _mime_type, _filename, responseHeaders =
+    connection:request(request.method, request.url, request.data or "", headers["content-type"] or "", headers)
 
   -- MoneyMoney's `Connection():request()` does not expose the HTTP status code.
   -- The actual YAXI response body is encrypted at this layer, so we can only detect
   -- errors that MoneyMoney itself surfaces when there is no response body (e.g.
-  -- `{"error": <number>, "error_description": "..."}`).
+  -- `{"error": <status>, "error_description": "..."}`).
   local status = 200
-  local ok, parsed = pcall(JSON, content)
-  if ok and parsed then
-    local dict = (parsed --[[@as MM.JSON]]):dictionary()
-    if type(dict["error"]) == "number" and dict["error_description"] then
-      status = dict["error"] --[[@as integer]]
+  local ok, dict = pcall(function()
+    return JSON(content):dictionary()
+  end)
+  if ok and type(dict) == "table" and type(dict["error"]) == "number" and dict["error_description"] then
+    local code = dict["error"] --[[@as integer]]
+    if code >= 400 and code <= 599 then
+      status = code
     end
   end
 
-  return http.Response:new(status, headers, content)
+  return http.Response:new(status, responseHeaders, content)
 end
 
 --endregion MMHttpClient

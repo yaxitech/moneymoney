@@ -6,6 +6,11 @@
 
 - The MoneyMoney API type definitions (`addons/moneymoney/library/mm.lua`) now follow the official web banking API documentation.
 
+### Fixed
+
+- Errors from the YAXI API now reach the extension's error handling on all requests.
+  Previously, an HTTP error on some requests (e.g., an invalid API key) made MoneyMoney abort the session with a raw HTTP error dialog instead of showing the proper message.
+
 ## [0.3] - 2026-07-21
 
 ### Changed
