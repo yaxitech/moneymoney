@@ -22,7 +22,8 @@ return {
   ---@type MM.TanMethod[]
   tanMethods = {
     {
-      name = MM.localizeText("ING App"),
+      -- "Banking to go" is the app name MoneyMoney recognizes and localizes
+      name = MM.localizeText("Banking to go"),
       hbciMethod = "700",
     },
     {
@@ -34,5 +35,5 @@ return {
       hbciMethod = "702",
     },
   },
-  appToApp = MM.localizeText("ING App"),
+  appToApp = MM.localizeText("Banking to go"),
 }

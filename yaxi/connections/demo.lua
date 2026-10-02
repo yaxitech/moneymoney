@@ -35,15 +35,16 @@ return {
   mapChallenge = function(_self, challenge, _obResponse)
     if challenge.tanMethods then
       for _, tanMethod in ipairs(challenge.tanMethods) do
-        if tanMethod.name == "NL58YAXI1234567890" then
+        local originalName = tanMethod.name
+        if originalName == "NL58YAXI1234567890" then
           tanMethod.name = "appTAN"
           tanMethod.hbciMethod = "900"
-          tanMethod.mediumName = tanMethod.name
+          tanMethod.mediumName = originalName
           tanMethod.isPreferred = true
-        elseif tanMethod.name == "NL31YAXI1234567891" then
+        elseif originalName == "NL31YAXI1234567891" then
           tanMethod.name = "smsTAN"
           tanMethod.hbciMethod = "901"
-          tanMethod.mediumName = tanMethod.name
+          tanMethod.mediumName = originalName
         end
       end
     end

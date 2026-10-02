@@ -75,7 +75,6 @@ return {
     {
       name = "pushTAN",      -- controls MoneyMoney's TAN UI (see below)
       hbciMethod = "920",    -- matching key (see below)
-      poll = true,           -- decoupled: MoneyMoney polls instead of asking for TAN input
       isPreferred = true,
     },
   },
@@ -102,6 +101,7 @@ For manual testing, set up MoneyMoney with the "YAXI Your Bank" service.
 **`name`** on `MM.TanMethod` controls which UI MoneyMoney shows for the TAN challenge.
 Use one of the recognized names defined in `addons/moneymoney/library/mm.lua` (`MM.TanMethodName`): `"pushTAN"`, `"chipTAN QR"`, `"photoTAN"`, `"mobileTAN"`, etc.
 Aliases like `"appTAN"`, `"BestSign"`, `"SecureGo plus"` also work for decoupled push flows.
+Decoupled behavior itself does not come from the method entry: the server returns a confirmation dialog, which `yaxi.interrupt` maps to a challenge with `poll = true`.
 
 **`hbciMethod`** is a matching key used internally to auto-select the right TAN method during payments.
 The preferred convention follows FinTS security function codes (3-digit numbers in the 900-997 range, bank-specific).

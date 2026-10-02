@@ -24,7 +24,6 @@ return {
     {
       name = MM.localizeText("Kontist App"),
       hbciMethod = "700",
-      poll = true,
     },
   },
 }

@@ -24,7 +24,6 @@ return {
     {
       name = "SecureGo plus",
       hbciMethod = "946",
-      poll = true,
       isPreferred = true,
     },
     {

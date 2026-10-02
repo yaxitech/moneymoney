@@ -26,7 +26,6 @@ return {
     {
       name = MM.localizeText("DKB App"),
       hbciMethod = "940",
-      poll = true,
       isPreferred = true,
     },
     {

@@ -24,7 +24,6 @@ return {
     {
       name = "BestSign",
       hbciMethod = "700",
-      poll = true,
       isPreferred = true,
     },
   },

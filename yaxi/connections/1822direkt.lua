@@ -28,7 +28,6 @@ return {
     {
       name = "1822TAN+ App",
       hbciMethod = "700",
-      poll = true,
     },
   },
 }

@@ -19,13 +19,11 @@ return {
     {
       name = "BestSign",
       hbciMethod = "921",
-      poll = true,
       isPreferred = true,
     },
     {
       name = "photoTAN push",
       hbciMethod = "903",
-      poll = true,
     },
     {
       name = "photoTAN",

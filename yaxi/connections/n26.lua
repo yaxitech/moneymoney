@@ -27,7 +27,6 @@ return {
     {
       name = MM.localizeText("N26 App"),
       hbciMethod = "700",
-      poll = true,
     },
   },
   mapAccount = function(self, yaxiAccount)
