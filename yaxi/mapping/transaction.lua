@@ -77,6 +77,26 @@ local function extractTransactionCode(bankTransactionCodes, preferences)
   return res
 end
 
+---Extract the German business transaction code (Geschäftsvorfallcode) and
+---the SWIFT booking key from the bank transaction codes.
+---@param bankTransactionCodes YAXI.RoutexClient.Result.Transaction.BankTransactionCodes[]?
+---@return integer? transactionCode
+---@return string? bookingKey
+local function extractNativeCodes(bankTransactionCodes)
+  ---@type integer?, string?
+  local transactionCode, bookingKey
+  for _, code in ipairs(bankTransactionCodes or {}) do
+    if not transactionCode and code.national and code.national.country == "DE" then
+      local gvc = tonumber(code.national.code)
+      transactionCode = gvc and math.tointeger(gvc)
+    end
+    if not bookingKey and code.swift then
+      bookingKey = code.swift
+    end
+  end
+  return transactionCode, bookingKey
+end
+
 ---Safely parse a `YYYY-MM-DD` date string, returning `nil` on failure.
 ---@param yyyymmdd string?
 ---@return integer?
@@ -146,6 +166,8 @@ function M.mapTransaction(tx, connection)
     bookingText = notEmpty(tx.additionalInformation)
   end
 
+  local transactionCode, bookingKey = extractNativeCodes(tx.bankTransactionCodes)
+
   ---@type MM.Transaction
   local transaction = {
     amount = amount,
@@ -160,6 +182,8 @@ function M.mapTransaction(tx, connection)
     purpose = purpose or purposeCodeName,
     purposeCode = tx.purposeCode,
     bookingText = bookingText,
+    transactionCode = transactionCode,
+    bookingKey = bookingKey,
     endToEndReference = tx.endToEndId,
     mandateReference = tx.mandateId,
     creditorId = tx.creditorId,

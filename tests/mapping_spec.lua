@@ -232,6 +232,9 @@ context("yaxi.mapping.transaction", function()
       assert.are_equal("0057780300544", result.endToEndReference)
       assert.are_equal("P6PYPY6Y5N2YU", result.mandateReference)
       assert.are_equal("LU96ZZZ0000000000000000058", result.creditorId)
+      -- German GVC and SWIFT booking key from the bank transaction codes
+      assert.are_equal(105, result.transactionCode)
+      assert.are_equal("DDT", result.bookingKey)
     end)
 
     test("uses debtor as counterparty for credit (salary)", function()
@@ -254,6 +257,8 @@ context("yaxi.mapping.transaction", function()
       assert.are_equal("DE89370400440532013000", result.accountNumber)
       assert.are_equal("Miete inkl. Betriebskosten, Flurstr. 4, Wohnungsnr. 5, Nürnberg", result.purpose)
       assert.are_equal("RINP", result.purposeCode)
+      assert.are_equal(117, result.transactionCode)
+      assert.are_equal("STO", result.bookingKey)
     end)
 
     test("extracts bookingText from bankTransactionCodes", function()

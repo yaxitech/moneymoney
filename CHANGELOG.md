@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Transactions now carry the German business transaction code (Geschäftsvorfallcode) and the SWIFT booking key when the bank provides them.
+
 ### Changed
 
 - The MoneyMoney API type definitions (`addons/moneymoney/library/mm.lua`) now follow the official web banking API documentation.
