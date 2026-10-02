@@ -22,15 +22,15 @@ local M = {}
 
 -- Data-driven TAN method guessing rules. Evaluated top-to-bottom; first match wins.
 -- Each rule lists `patterns` (all must be present in the lowercase message) and a `name`.
+--
+-- Never use decoupled app method names here (e.g., `pushTAN`, `BestSign`):
+-- MoneyMoney renders those without the input field these dialogs need.
 ---@class YAXI.MoneyMoney.TanRule
 ---@field patterns string[] All patterns must be found in the message
 ---@field name string Resulting TAN method name (matched by MM via regex, not exact `MM.TanMethodName`)
 
 ---@type YAXI.MoneyMoney.TanRule[]
 local TAN_RULES = {
-  -- Bank-specific methods (most specific first)
-  { patterns = { "bestsign" }, name = "BestSign" },
-  { patterns = { "securego" }, name = "SecureGo plus" },
   -- chipTAN / Sm@rtTAN variants
   { patterns = { "qr" }, name = "chipTAN QR" },
   { patterns = { "flicker" }, name = "chipTAN optisch" },
@@ -39,16 +39,13 @@ local TAN_RULES = {
   { patterns = { "usb" }, name = "chipTAN USB / Bluetooth" },
   { patterns = { "bluetooth" }, name = "chipTAN USB / Bluetooth" },
   { patterns = { "smart", "photo" }, name = "Sm@rtTAN photo" },
-  -- photoTAN / pushTAN
+  -- photoTAN
   { patterns = { "photo" }, name = "photoTAN" },
-  { patterns = { "push" }, name = "pushTAN" },
   -- SMS / mobile
   { patterns = { "sms" }, name = "smsTAN" },
   { patterns = { "mobil" }, name = "mobileTAN" },
-  -- Generic fallbacks
+  -- Generic fallback
   { patterns = { "chiptan" }, name = "chipTAN" },
-  { patterns = { "apptan" }, name = "appTAN" },
-  { patterns = { "tan" }, name = "TAN" },
 }
 
 ---Check whether all patterns in a rule match the given message.
@@ -64,19 +61,49 @@ local function matchesRule(msg, rule)
   return true
 end
 
+---Extract image or chipTAN flicker data from a dialog for use as challenge
+---content. MoneyMoney renders PNG/JPEG bytes and chipTAN flicker data (the
+---plain HHD-UC string, or raw bytes as hex); other image types are dropped.
+---@param dialog YAXI.RoutexClient.Dialog
+---@return string? data
+local function mediaChallengeData(dialog)
+  local image = dialog.image
+  if not image then
+    return nil
+  end
+  if image.mimeType == "image/png" or image.mimeType == "image/jpeg" then
+    return image.data --[[@as string]]
+  end
+  local hhdUc = image.hhdUcData --[[@as string?]]
+  if hhdUc then
+    -- Plain HHD-UC is printable ASCII; frame anything else as a hex string.
+    if hhdUc:find("[^%g%s]") then
+      return MM.binToHex(hhdUc)
+    end
+    return hhdUc
+  end
+  return nil
+end
+
 ---Build an `MM.SessionChallenge` for a `Field` dialog (TAN/OTP input).
 ---@param dialog YAXI.RoutexClient.Dialog
 ---@return MM.SessionChallenge
 local function buildFieldChallenge(dialog)
   local field = dialog.input --[[@as YAXI.RoutexClient.Dialog.Input.Field]]
-  local image = dialog.image
+
+  -- Treat missing lengths as unconstrained: MoneyMoney would force exactly
+  -- 6 characters, and the input field accepts at most 15.
+  local minLength = field.minLength and math.floor(field.minLength) or 1
+  local maxLength = math.max(field.maxLength and math.floor(field.maxLength) or 15, minLength)
 
   ---@type MM.TanMethod
   local tanMethod = {
-    name = nil, ---@diagnostic disable-line: assign-type-mismatch
+    name = "TAN",
     isNumeric = field.type == InputType.Number,
-    minLength = field.minLength and math.floor(field.minLength),
-    maxLength = field.maxLength and math.floor(field.maxLength),
+    -- MoneyMoney uppercases non-numeric input unless told otherwise
+    isUppercase = false,
+    minLength = minLength,
+    maxLength = maxLength,
   }
 
   ---@type MM.SessionChallenge
@@ -85,34 +112,34 @@ local function buildFieldChallenge(dialog)
     label = "Input",
   }
 
-  -- Image handling (`photoTAN`, QR) — binary data auto-detected by MM via header bytes
-  if image and (image.mimeType == "image/png" or image.mimeType == "image/jpeg") then
-    challenge.challenge = image.data --[[@as string]]
+  local media = mediaChallengeData(dialog)
+  if media then
+    challenge.challenge = media
+    -- Keep the bank's instruction visible while the challenge slot holds media
+    challenge.title = dialog.message
   elseif dialog.message then
-    -- Plain text fallback — displayed as challenge description
+    -- Plain text fallback, displayed as challenge description
     challenge.challenge = dialog.message
   end
 
   if dialog.message then
     local msg = dialog.message:lower()
 
-    -- Guess TAN method name from message keywords
-    if not tanMethod.name then
-      for _, rule in ipairs(TAN_RULES) do
-        if matchesRule(msg, rule) then
-          tanMethod.name = rule.name --[[@as MM.TanMethodName]]
-          log:debug("Guessed TAN method name: %s", rule.name)
-          break
-        end
+    -- Guess a more specific TAN method name from message keywords
+    for _, rule in ipairs(TAN_RULES) do
+      if matchesRule(msg, rule) then
+        tanMethod.name = rule.name --[[@as MM.TanMethodName]]
+        log:debug("Guessed TAN method name: %s", rule.name)
+        break
       end
     end
 
-    -- Extract chipTAN start code (8-digit number)
-    if msg:find("start[%s%-]?code") then
-      challenge.startCode = dialog.message:match("%d%d%d%d%d%d%d%d")
-      if challenge.startCode then
-        log:debug("Extracted chipTAN start code: %s", challenge.startCode)
-      end
+    -- Anchor the start code to the keyword so an unrelated reference
+    -- number cannot match
+    local startCode = dialog.message:match("[Ss]tart[%s%-]?[Cc]ode:?%s*(%d+)")
+    if startCode and #startCode >= 4 and #startCode <= 12 then
+      challenge.startCode = startCode
+      log:debug("Extracted chipTAN start code: %s", startCode)
     end
 
     -- Label
@@ -148,14 +175,12 @@ function M.mapToChallenge(session, obResponse)
     end
 
     if input:isInstanceOf(Confirmation) then
-      log:debug("Challenge: Confirmation (poll)")
+      log:debug("Challenge: Confirmation (poll, context=%s)", dialog.context)
+      -- No `title`: MoneyMoney generates a fitting instruction text itself.
       challenge = {
         challenge = dialog.message or "Confirm with your bank",
         poll = true,
       }
-      if dialog.context and dialog.context ~= DialogContext.Sca then
-        challenge.title = dialog.context
-      end
     elseif input:isInstanceOf(Selection) then
       local selection = input --[[@as YAXI.RoutexClient.Dialog.Input.Selection]]
       log:debug("Challenge: Selection with %d options", #selection.options)
@@ -184,8 +209,10 @@ function M.mapToChallenge(session, obResponse)
   -- Let the `Connection` customize the challenge
   challenge = connection:mapChallenge(challenge, obResponse)
 
-  -- Detect TAN method selection and persist discovered methods
-  if challenge.tanMethods then
+  -- Persist discovered TAN methods for SCA selections only; account
+  -- selections also arrive as `Selection` dialogs
+  local dialogContext = session.dialog and (session.dialog.context or DialogContext.Sca)
+  if challenge.tanMethods and dialogContext == DialogContext.Sca then
     local isTanSelection, matchedMethods = connection:detectTanMethodSelection(challenge)
     if isTanSelection and #matchedMethods > 0 then
       connection:storeDiscoveredTanMethods(matchedMethods)
@@ -254,11 +281,8 @@ local function buildPaymentChallenge(session)
         orderId = orderId,
       }
     elseif input:isInstanceOf(Field) then
-      local image = dialog.image
-      local challengeData = (image and (image.mimeType == "image/png" or image.mimeType == "image/jpeg")) and image.data --[[@as string]]
-        or dialog.message
       res = {
-        challenge = challengeData,
+        challenge = mediaChallengeData(dialog) or dialog.message,
         orderId = orderId,
       }
     else

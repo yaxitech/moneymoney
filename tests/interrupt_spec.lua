@@ -141,7 +141,7 @@ context("yaxi.interrupt", function()
       assert.is_true(challenge.poll)
     end)
 
-    test("sets title to context for Confirmation with non-Sca context", function()
+    test("omits title for Confirmation with non-Sca context", function()
       local session = mockSession()
       local dialog = mockConfirmationDialog("Waiting for redirect", DialogContext.Redirect)
       local challenge = interrupt.mapToChallenge(session, dialog)
@@ -149,7 +149,8 @@ context("yaxi.interrupt", function()
       ---@cast challenge -nil
       assert.are_equal("Waiting for redirect", challenge.challenge)
       assert.is_true(challenge.poll)
-      assert.are_equal(DialogContext.Redirect, challenge.title)
+      -- Internal context names are not user-facing instruction text
+      assert.is_nil(challenge.title)
     end)
 
     test("returns tanMethods for a Selection dialog", function()
@@ -208,13 +209,14 @@ context("yaxi.interrupt", function()
       assert.are_equal("photoTAN", challenge.tanMethod.name)
     end)
 
-    test("extracts 8-digit start code from message", function()
+    test("extracts the start code following the keyword", function()
       local session = mockSession()
-      local dialog = mockFieldDialog("Enter the TAN. Start-Code: 12345678", InputType.Number)
+      -- The order reference must not be mistaken for the start code
+      local dialog = mockFieldDialog("Auftrag 1234567890123. Start-Code: 87654321", InputType.Number)
       local challenge = interrupt.mapToChallenge(session, dialog)
       assert.is_not_nil(challenge)
       ---@cast challenge -nil
-      assert.are_equal("12345678", challenge.startCode)
+      assert.are_equal("87654321", challenge.startCode)
     end)
 
     test("sets isNumeric=true for Number input type", function()
@@ -225,6 +227,42 @@ context("yaxi.interrupt", function()
       ---@cast challenge -nil
       ---@diagnostic disable-next-line: need-check-nil
       assert.is_true(challenge.tanMethod.isNumeric)
+    end)
+
+    test("disables uppercasing and forced lengths for text input", function()
+      local session = mockSession()
+      local dialog = mockFieldDialog("Enter the code from the letter", InputType.Text)
+      local challenge = interrupt.mapToChallenge(session, dialog)
+      assert.is_not_nil(challenge)
+      ---@cast challenge -nil
+      local tanMethod = challenge.tanMethod
+      assert.is_not_nil(tanMethod)
+      ---@cast tanMethod -nil
+      assert.is_false(tanMethod.isNumeric)
+      assert.is_false(tanMethod.isUppercase)
+      -- Without server-side lengths, MoneyMoney would force exactly 6 characters
+      assert.are_equal(1, tanMethod.minLength)
+      -- 15 is the maximum the TAN input field accepts
+      assert.are_equal(15, tanMethod.maxLength)
+      assert.are_equal("TAN", tanMethod.name)
+    end)
+
+    test("passes HHD-UC flicker data as the challenge", function()
+      local session = mockSession()
+      local dialog = mockFieldDialog("Nutzen Sie den Flickercode. Startcode 87654321", InputType.Number, 6, 6, {
+        mimeType = "image/gif",
+        data = "GIF89a-animation-bytes",
+        hhdUcData = "220812345678101234567890",
+      })
+      local challenge = interrupt.mapToChallenge(session, dialog)
+      assert.is_not_nil(challenge)
+      ---@cast challenge -nil
+      assert.are_equal("220812345678101234567890", challenge.challenge)
+      -- The instruction stays visible as title; the GIF is not renderable
+      assert.are_equal("Nutzen Sie den Flickercode. Startcode 87654321", challenge.title)
+      assert.are_equal("87654321", challenge.startCode)
+      ---@diagnostic disable-next-line: need-check-nil
+      assert.are_equal("chipTAN optisch", challenge.tanMethod.name)
     end)
 
     test("returns redirect challenge with URL", function()

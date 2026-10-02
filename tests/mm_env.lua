@@ -99,6 +99,13 @@ MM = {
     end))
   end,
   ---@param data string
+  ---@return string hex
+  binToHex = function(data)
+    return (data:gsub(".", function(c)
+      return string.format("%02X", string.byte(c))
+    end))
+  end,
+  ---@param data string
   ---@return string hex Lowercase hex digest
   sha256 = function(data)
     local sha2 = require("routex-client.vendor.tls13.crypto.hash.sha2")
