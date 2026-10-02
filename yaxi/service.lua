@@ -336,7 +336,7 @@ end
 ---Respond to an interrupt based on session state (`dialog` or `redirect`).
 ---Dispatches to the correct `RoutexClient` `respond` or `confirm` method.
 ---@param session YAXI.MoneyMoney.Session
----@param userInput string[]|MM.TanMethod[] Credentials/TAN from MoneyMoney
+---@param userInput MM.TanCredentials|MM.TanMethod[] Credentials/TAN from MoneyMoney
 ---@return YAXI.RoutexClient.OBResponse
 function M.respondToInterrupt(session, userInput)
   local svc, client = resolveService(session)
@@ -351,6 +351,12 @@ function M.respondToInterrupt(session, userInput)
     end
 
     if input:isInstanceOf(Confirmation) then
+      local credentials = userInput --[[@as MM.TanCredentials]]
+      -- When MoneyMoney allows no further polling attempt, it expects its
+      -- localized cancel message back instead of another confirmation call.
+      if credentials[3] == false then
+        error(credentials[2] or "The required authorization was not carried out.", 0)
+      end
       log:debug("Confirming dialog for %s", session.activeService)
       return svc.confirm(client, {
         ticket = session.activeTicket,

@@ -346,13 +346,33 @@ context("yaxi.interrupt", function()
       svcMod.confirmDialog = function(_session)
         return mockResult()
       end
+      local origSleep = MM.sleep
+      local slept
+      MM.sleep = function(seconds)
+        slept = seconds
+      end
 
       local session = mockSession()
       local dialog = mockConfirmationDialog("VoP check pending", DialogContext.VopCheck)
       local res = interrupt.mapToPaymentResponse(session, dialog)
       assert.are_equal("accepted", res.status)
+      -- The auto-confirm loop must wait before re-confirming
+      assert.are_equal(2, slept)
 
+      MM.sleep = origSleep
       svcMod.confirmDialog = origConfirmDialog
+    end)
+
+    test("returns the cancel message when polling is exhausted", function()
+      local svcMod = require("yaxi.service")
+      local session = mockSession()
+      session.client = {}
+      session.activeService = "accounts"
+      session.dialog = mockConfirmationDialog("Confirm in your app", DialogContext.Sca)
+
+      local ok, err = pcall(svcMod.respondToInterrupt, session, { "", "Freigabe nicht durchgeführt.", false })
+      assert.is_false(ok)
+      assert.are_equal("Freigabe nicht durchgeführt.", err)
     end)
 
     test("surfaces VopConfirmation message via vop field", function()

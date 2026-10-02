@@ -82,6 +82,7 @@ context("SubmitPayment VoP warning gate", function()
     assert.is_false(callTransferRan)
     assert.are_equal("pending", res.status)
     assert.is_true(res.poll)
+    -- `vop` gates: MoneyMoney waits for the user's confirmation
     assert.is_string(res.vop)
     ---@cast res.vop -nil
     assert.is_truthy(res.vop:find("Verification of Payee"))

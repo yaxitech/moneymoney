@@ -81,6 +81,8 @@ MM = {
     return s
   end,
   printStatus = function() end,
+  ---@param _seconds number
+  sleep = function(_seconds) end,
   printDebug = function(...)
     -- Like `print`: all values via `tostring`, tab-separated
     local parts = {}

@@ -318,7 +318,7 @@ function YAXI.InitializeSession2(protocol, bankCode, step, credentials, interact
       return interrupt.mapToChallenge(sess, obResponse)
     elseif sessionType == "new account" then
       assert(session, "No active session")
-      local obResponse = service.respondToInterrupt(session, credentials --[[@as string[]|MM.TanMethod[] ]])
+      local obResponse = service.respondToInterrupt(session, credentials --[[@as MM.TanCredentials|MM.TanMethod[] ]])
       return interrupt.mapToChallenge(session, obResponse)
     elseif step == 1 then
       -- `"refresh"` or `"payment"`: create session, defer service calls
@@ -407,7 +407,7 @@ function YAXI.RefreshAccount(account, since, isKnownTransactionId, step, credent
     end
 
     -- step > 1: respond to interrupt
-    local obResponse = service.respondToInterrupt(session, credentials --[[@as string[]|MM.TanMethod[] ]])
+    local obResponse = service.respondToInterrupt(session, credentials --[[@as MM.TanCredentials|MM.TanMethod[] ]])
     local challenge = interrupt.mapToChallenge(session, obResponse)
     if challenge then
       return challenge
@@ -463,6 +463,8 @@ function YAXI.SubmitPayment(step, account, payment, tanMethod, credentials)
 
       -- Banks without native VoP get a synthetic confirmation BEFORE `callTransfer`,
       -- so the user can still verify (and abort) while no transfer is in flight.
+      -- The `vop` field gates: MoneyMoney shows its payee verification sheet
+      -- and continues only once the user confirms; `poll` plays no role here.
       if session.connection.vop == VopMode.None and not YAXI_SUPPRESS_VOP_WARNING then
         session.pendingVopWarning = true
         return {
@@ -491,7 +493,7 @@ function YAXI.SubmitPayment(step, account, payment, tanMethod, credentials)
       local ticketId = session.activeTicket and ticketMod.getId(session.activeTicket) or nil
       return { status = "accepted", orderId = ticketId }
     end
-    local obResponse = service.respondToInterrupt(session, credentials --[[@as string[]|MM.TanMethod[] ]])
+    local obResponse = service.respondToInterrupt(session, credentials --[[@as MM.TanCredentials|MM.TanMethod[] ]])
     return interrupt.mapToPaymentResponse(session, obResponse, tanMethod)
   end)
 end

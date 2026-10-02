@@ -264,6 +264,9 @@ local function buildPaymentChallenge(session)
     local dialog = session.dialog
     local input = dialog.input or error("Dialog has no input")
 
+    -- Sent by decoupled-VoP banks only: the user confirms the VoP result in
+    -- the banking app; polling merely tracks that decision. Embedded VoP
+    -- would need a MoneyMoney-side confirmation instead.
     if input:isInstanceOf(Confirmation) and dialog.context == DialogContext.VopConfirmation then
       log:debug("VopConfirmation: name mismatch, surfacing to user")
       res = {
@@ -325,6 +328,9 @@ function M.mapToPaymentResponse(session, obResponse, tanMethod)
         obResponse = autoSelectAndRespond(session, connection, obResponse, tanMethod)
       elseif input:isInstanceOf(Confirmation) and session.dialog.context == DialogContext.VopCheck then
         log:debug("VopCheck: auto-confirming pending check")
+        -- The server dictates how long to wait before auto-confirming
+        local confirmation = input --[[@as YAXI.RoutexClient.Dialog.Input.Confirmation]]
+        MM.sleep(confirmation.pollingDelaySecs or 2)
         obResponse = svcMod.confirmDialog(session)
       else
         return buildPaymentChallenge(session)
