@@ -279,17 +279,25 @@ context("yaxi.mapping.transaction", function()
       assert.is_nil(result)
     end)
 
-    test("sets booked=false for non-Booked status", function()
-      -- Synthetic: no real Pending transactions in demo data
-      local tx = {
-        amount = { amount = "10.00", currency = "EUR" },
-        status = "Pending",
-        bookingDate = "2025-07-01",
-      }
-      local result = transactionMapping.mapTransaction(tx, connection)
-      assert.is_not_nil(result)
-      ---@cast result -nil
-      assert.are_equal(false, result.booked)
+    test("derives booked from the transaction status", function()
+      ---@param status string
+      ---@return MM.Transaction?
+      local function mapWithStatus(status)
+        return transactionMapping.mapTransaction({
+          amount = { amount = "10.00", currency = "EUR" },
+          status = status,
+          bookingDate = "2025-07-01",
+        } --[[@as any]], connection)
+      end
+      ---@diagnostic disable-next-line: need-check-nil
+      assert.are_equal(false, mapWithStatus("Pending").booked)
+      -- Invoiced and Paid are settled card/commerce states
+      ---@diagnostic disable-next-line: need-check-nil
+      assert.is_true(mapWithStatus("Invoiced").booked)
+      ---@diagnostic disable-next-line: need-check-nil
+      assert.is_true(mapWithStatus("Paid").booked)
+      -- Canceled transactions are not reported at all
+      assert.is_nil(mapWithStatus("Canceled"))
     end)
 
     test("falls back to transactionDate when bookingDate is missing", function()
@@ -304,6 +312,15 @@ context("yaxi.mapping.transaction", function()
       ---@cast result -nil
       -- Verify the date roundtrips correctly through UTC conversion
       assert.are_equal("2025-07-15", os.date("!%Y-%m-%d", result.bookingDate))
+
+      -- Pending transactions often carry only a value date
+      local pending = transactionMapping.mapTransaction({
+        amount = { amount = "20.00", currency = "EUR" },
+        status = "Pending",
+        valueDate = "2025-07-20",
+      } --[[@as any]], connection)
+      ---@diagnostic disable-next-line: need-check-nil
+      assert.are_equal("2025-07-20", os.date("!%Y-%m-%d", pending.bookingDate))
     end)
   end)
 end)

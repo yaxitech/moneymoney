@@ -14,6 +14,9 @@
 - When a decoupled approval is cancelled or not granted in time, the extension now shows MoneyMoney's message for it instead of polling once more.
 - Pending Verification of Payee checks are now polled with the server-requested delay instead of back-to-back requests.
 - The displayed balance no longer falls back to an outdated entry when the computer's clock runs slightly behind.
+- Settled card and commerce transactions (status `Invoiced` or `Paid`) now show as booked instead of pending, and canceled transactions are no longer shown.
+- Transactions without a booking or transaction date now use the value date instead of the time of the refresh, so pending transactions no longer shift on every refresh.
+- Transaction deduplication no longer falls back to the SEPA end-to-end reference, which is not unique and could hide distinct transactions as duplicates.
 - An account whose balance is missing from the bank's response now shows an error instead of a balance of 0.00, and no longer triggers repeated balance requests.
 - Errors from the YAXI API now reach the extension's error handling on all requests.
   Previously, an HTTP error on some requests (e.g., an invalid API key) made MoneyMoney abort the session with a raw HTTP error dialog instead of showing the proper message.

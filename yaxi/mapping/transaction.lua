@@ -91,8 +91,17 @@ local function safeDateToTimestamp(yyyymmdd)
   return nil
 end
 
+---Transaction statuses that represent a settled transaction.
+---@type table<string, true>
+local SETTLED_STATUS = {
+  Booked = true,
+  Invoiced = true,
+  Paid = true,
+}
+
 ---Map a YAXI transaction to an `MM.Transaction`.
----Returns `nil` for transactions that cannot be mapped (e.g. missing amount).
+---Returns `nil` for transactions that cannot be mapped (e.g. missing amount)
+---or that must not be reported (canceled).
 ---@param tx YAXI.RoutexClient.Result.Transaction
 ---@param connection YAXI.MoneyMoney.Connection
 ---@return MM.Transaction?
@@ -103,8 +112,17 @@ function M.mapTransaction(tx, connection)
     return nil
   end
 
-  -- Determine booking date with fallback chain
-  local bookingDate = safeDateToTimestamp(tx.bookingDate) or safeDateToTimestamp(tx.transactionDate) or os.time()
+  if tx.status == "Canceled" then
+    log:debug("Skipping canceled transaction (id=%s)", tx.transactionId or "?")
+    return nil
+  end
+
+  -- Pending transactions often carry only a value date; "now" would shift
+  -- on every refresh
+  local bookingDate = safeDateToTimestamp(tx.bookingDate)
+    or safeDateToTimestamp(tx.transactionDate)
+    or safeDateToTimestamp(tx.valueDate)
+    or os.time()
 
   -- Select counterparty: creditor for debits, debtor for credits
   ---@type YAXI.RoutexClient.Result.Transaction.Party?
@@ -134,7 +152,7 @@ function M.mapTransaction(tx, connection)
     currency = tx.amount and tx.amount.currency,
     bookingDate = bookingDate,
     valueDate = safeDateToTimestamp(tx.valueDate),
-    booked = tx.status == "Booked",
+    booked = SETTLED_STATUS[tx.status] or false,
     name = party and party.name,
     accountNumber = party and party.iban,
     bankCode = party and party.bic,
@@ -145,7 +163,9 @@ function M.mapTransaction(tx, connection)
     endToEndReference = tx.endToEndId,
     mandateReference = tx.mandateId,
     creditorId = tx.creditorId,
-    transactionId = tx.accountServicerReference or tx.transactionId or tx.paymentId or tx.endToEndId,
+    -- Deduplication key; never `endToEndId`, which is often "NOTPROVIDED"
+    -- and repeats across standing order occurrences
+    transactionId = tx.accountServicerReference or tx.entryReference or tx.transactionId or tx.paymentId,
   }
 
   return transaction
