@@ -313,7 +313,7 @@ function YAXI.InitializeSession2(protocol, bankCode, step, credentials, interact
       session = sess
       sess.sessionType = sessionType
       sess.interactive = interactive
-      sess:setCredentials(credentials --[[@as string[] ]])
+      sess:setCredentials(credentials --[[@as MM.LoginCredentials]])
       MM.printStatus("Fetching accounts…")
       local obResponse = service.callAccounts(sess)
       return interrupt.mapToChallenge(sess, obResponse)
@@ -328,7 +328,7 @@ function YAXI.InitializeSession2(protocol, bankCode, step, credentials, interact
       session = sess
       sess.sessionType = sessionType
       sess.interactive = interactive
-      sess:setCredentials(credentials --[[@as string[] ]])
+      sess:setCredentials(credentials --[[@as MM.LoginCredentials]])
       return nil
     end
     -- step 2+ shouldn't happen for refresh/payment init

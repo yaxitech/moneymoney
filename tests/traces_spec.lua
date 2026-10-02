@@ -20,7 +20,7 @@ context("yaxi.traces", function()
       local digest = traces.hashExtensionFile(extDir)
       assert.is_string(digest)
       assert.are_equal(64, #digest)
-      assert.are_equal(MM.sha256("-- test extension"), digest)
+      assert.are_equal(MM.sha256("-- test extension"):lower(), digest)
 
       os.execute(string.format("rm -rf %q", dir))
     end)
@@ -49,7 +49,7 @@ context("yaxi.traces", function()
         error(digest)
       end
 
-      assert.are_equal(MM.sha256("upper"), digest)
+      assert.are_equal(MM.sha256("upper"):lower(), digest)
       assert.are_equal("/fake/dir/YAXI.lua", tried[1])
     end)
 

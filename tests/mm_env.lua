@@ -108,14 +108,14 @@ MM = {
     end))
   end,
   ---@param data string
-  ---@return string hex Lowercase hex digest
+  ---@return string hex Uppercase hex digest, matching the real MoneyMoney
   sha256 = function(data)
     local sha2 = require("routex-client.vendor.tls13.crypto.hash.sha2")
     local ctx = sha2.sha256() ---@diagnostic disable-line: call-non-callable
     ctx:update(data)
     local raw = ctx:finish()
     return (raw:gsub(".", function(c)
-      return string.format("%02x", string.byte(c))
+      return string.format("%02X", string.byte(c))
     end))
   end,
 }

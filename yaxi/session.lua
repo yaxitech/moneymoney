@@ -100,14 +100,17 @@ function Session:new(connection, apiKeyId, apiKeySecret, version)
   return obj
 end
 
----Set credentials from the MoneyMoney credentials array based on
+---Set credentials from the MoneyMoney login credentials based on
 ---the `ConnectionInfo.credentials` model (`full`, `userId`, or `none`).
----@param mmCredentials string[]
+---@param mmCredentials MM.LoginCredentials
 function Session:setCredentials(mmCredentials)
   local model = self.connectionInfo.credentials
   if model.full then
     self.credentials.userId = mmCredentials[1]
-    self.credentials.password = mmCredentials[2]
+    -- The password is always the last login dialog field
+    if #mmCredentials > 1 then
+      self.credentials.password = mmCredentials[#mmCredentials]
+    end
   elseif model.userId then
     self.credentials.userId = mmCredentials[1]
   end
