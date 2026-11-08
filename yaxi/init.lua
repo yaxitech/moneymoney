@@ -26,10 +26,11 @@ local config = require("yaxi.config").load(log)
 log:setLevel(config.logLevel or "INFO")
 
 local extension = require("yaxi.extension")
+local manifest = require("yaxi.manifest")
 extension.setup({
   apiKeyId = config.apiKeyId or "",
   apiKeySecret = config.apiKeySecret or "",
   suppressVopWarning = config.suppressVopWarning or false,
 })
 
-log:info("YAXI loaded")
+log:info("YAXI %s loaded. Updates are released at https://github.com/yaxitech/moneymoney", manifest.version)

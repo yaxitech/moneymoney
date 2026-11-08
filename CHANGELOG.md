@@ -1,12 +1,13 @@
 # Changelog
 
-## Unreleased
+## [0.5] - 2026-11-08
 
 ### Added
 
 - Standing orders
 - Foreign currency transactions show the original amount, exchange rates, and fees in the purpose.
 - Plain-text transaction codes from the bank serve as the transaction type when nothing else is available.
+- The startup log message shows the version and where updates are released.
 
 ### Changed
 
