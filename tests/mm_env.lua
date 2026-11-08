@@ -23,21 +23,22 @@ package.path = table.concat({
 --region Constants
 
 -- MM constants are opaque at the type level (aliased to `string` in the LuaCATS
--- definitions) but are integers at runtime. We omit @type annotations here to
--- avoid assign-type-mismatch warnings.
+-- definitions) and hold MoneyMoney's display names at runtime. We omit @type
+-- annotations here to avoid assign-type-mismatch warnings.
 
-AccountTypeGiro = 1
-AccountTypeSavings = 2
-AccountTypeFixedTermDeposit = 3
-AccountTypeLoan = 4
-AccountTypeCreditCard = 5
-AccountTypePortfolio = 6
-AccountTypeInsuranceContracts = 7
-AccountTypeOther = 8
+AccountTypeGiro = "Giro account"
+AccountTypeSavings = "Savings account"
+AccountTypeFixedTermDeposit = "Fixed term deposit"
+AccountTypeLoan = "Loan account"
+AccountTypeCreditCard = "Credit card"
+AccountTypePortfolio = "Portfolio"
+AccountTypeInsuranceContracts = "Insurance contracts"
+AccountTypeOther = "Unknown"
 
-PaymentTypeTransfer = 1
-PaymentTypeInstantTransfer = 10
-PaymentTypeScheduledTransfer = 2
+PaymentTypeTransfer = "Transfer"
+PaymentTypeInstantTransfer = "Instant transfer"
+PaymentTypeScheduledTransfer = "Scheduled transfer"
+PaymentTypeStandingOrder = "Standing order"
 
 ProtocolWebBanking = "Web Banking"
 

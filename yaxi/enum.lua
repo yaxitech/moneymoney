@@ -11,6 +11,7 @@ M.Service = {
   Accounts = "accounts",
   Balances = "balances",
   Transactions = "transactions",
+  StandingOrders = "standingOrders",
   Transfer = "transfer",
 }
 

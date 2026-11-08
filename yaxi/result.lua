@@ -8,6 +8,7 @@ local log = (require("routex-client.logging") --[[@as lualogging]]).defaultLogge
 local balanceMapping = require("yaxi.mapping.balance")
 local base64 = require("routex-client.util.base64")
 local jwt = require("routex-client.jwt")
+local standingOrderMapping = require("yaxi.mapping.standing_order")
 
 local M = {}
 
@@ -104,6 +105,17 @@ function M.buildRefreshResponse(sess, iban, paymentTypes)
     transactions = transactions,
     paymentTypes = paymentTypes,
   }
+end
+
+---Build the `FetchScheduledPayments` response from decoded standing orders.
+---@param standingOrders YAXI.RoutexClient.Result.StandingOrder[]?
+---@return MM.FetchScheduledPaymentsResponse
+function M.buildScheduledPaymentsResponse(standingOrders)
+  assert(standingOrders, "No standing orders data")
+
+  local payments = standingOrderMapping.mapStandingOrders(standingOrders)
+  log:debug("Mapped %d standing orders", #payments)
+  return { payments = payments }
 end
 
 return M

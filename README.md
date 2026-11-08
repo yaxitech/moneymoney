@@ -2,7 +2,7 @@
 
 [MoneyMoney](https://moneymoney-app.com) is a popular multi-banking app for macOS.
 Unfortunately, it does not [natively support every bank](https://moneymoney.app/banken/).
-This extension adds support for additional banks through the [YAXI Open Banking](https://yaxi.tech) API which fills that gap: it enables accounts, balances, transactions, and instant bank transfers.
+This extension adds support for additional banks through the [YAXI Open Banking](https://yaxi.tech) API which fills that gap: it enables accounts, balances, transactions, standing orders, and instant bank transfers.
 The YAXI API includes a free monthly usage tier.
 
 ### Currently supported banks

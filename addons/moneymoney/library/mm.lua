@@ -1247,8 +1247,6 @@ LocalStorage = {}
 ---@field pendingBalances? {[1]: number, [2]: string}[] Multi-currency pending balances as `{amount, currency}` tuples, analogous to `balances`
 ---@field transactions? MM.Transaction[] Transactions ordered by booking date, newest first. Each needs at least `amount` and `bookingDate`. Transactions already in the database are dropped as duplicates.
 ---@field securities? MM.Security[] Portfolio positions
----@field payments? MM.ScheduledPayment[] Scheduled/standing payments (convenience shortcut; dedicated `FetchScheduledPayments` callback is the standard path)
----@field statements? MM.Statement[] PDF bank statements (convenience shortcut; dedicated `FetchStatements` callback is the standard path)
 ---@field bonusPoints? number Number of points in a bonus program
 ---@field paymentTypes? MM.PaymentTypeConst[] Payment types supported by this account
 
@@ -1303,7 +1301,7 @@ LocalStorage = {}
 ---@field standingOrderEnd? MM.Timestamp Last execution date (nil = indefinite)
 ---@field standingOrderUnit? MM.StandingOrderUnit Recurrence unit: month or week
 ---@field standingOrderPeriod? integer Units between executions (1 = every unit, 3 = every 3rd, etc.)
----@field standingOrderDay? integer Day of month (1–31) or day of week (1–7)
+---@field standingOrderDay? integer Day of month (97, 98, 99: third to last, second to last, last) or ISO weekday (1 = Monday)
 --- Scheduling ─────────────────────────────────────────────────────────────────
 ---@field scheduledDate? MM.Timestamp Execution date (non-standing-order scheduled transfers)
 --- Batch envelope fields ──────────────────────────────────────────────────────
@@ -1473,10 +1471,12 @@ LocalStorage = {}
 ---A scheduled or standing payment.
 ---@class MM.ScheduledPayment
 ---@field type MM.PaymentTypeConst Payment type (`PaymentTypeScheduledTransfer` or `PaymentTypeStandingOrder`)
----@field orderId string|integer Unique payment identifier
----@field accountNumber string Recipient IBAN
----@field name string Recipient name
----@field purpose string Payment purpose/memo
+---@field orderId string Unique payment identifier
+---@field accountNumber? string Recipient IBAN
+---@field bankCode? string Recipient BIC
+---@field name? string Recipient name
+---@field purpose? string Payment purpose/memo
+---@field purposeCode? string SEPA purpose code
 ---@field amount number Payment amount
 ---@field currency? string Currency code
 ---@field timezone? string Timezone for dates, e.g. `"GMT"`
@@ -1486,6 +1486,7 @@ LocalStorage = {}
 ---@field standingOrderEnd? MM.Timestamp Last execution date (nil = indefinite)
 ---@field standingOrderUnit? MM.StandingOrderUnit Recurrence unit: month or week
 ---@field standingOrderPeriod? integer Units between executions (1 = monthly, 3 = quarterly)
+---@field standingOrderDay? integer Day of month (97, 98, 99: third to last, second to last, last) or ISO weekday (1 = Monday)
 
 -- ── MM.WebBankingExtension ────────────────────────────────────────────────────
 
@@ -1528,7 +1529,7 @@ LocalStorage = {}
 ---@field GetTanMethods? fun(account: MM.Account): MM.TanMethod[] Return available TAN/SCA methods. Called before `InitializeSession2`.
 ---@field MapAccount? fun(account: MM.Account): MM.Account Map/transform an account returned by `ListAccounts`.
 ---@field FetchStatements? fun(accounts: MM.Account[], knownIdentifiers: table<string, boolean>, step?: integer, credentials?: MM.TanCredentials, interactive?: boolean): MM.FetchStatementsResponse|MM.SessionChallenge|MM.ErrorMessage Fetch PDF statements and other mailbox documents. Called once with all affected accounts (not per account). Documents whose `identifier` is a key of `knownIdentifiers` were fetched before and can be skipped. May return a 2FA challenge like `InitializeSession2`; it is then called again with increased `step`.
----@field FetchScheduledPayments? fun(account: MM.Account): MM.FetchScheduledPaymentsResponse|MM.ErrorMessage Fetch scheduled/standing payments.
+---@field FetchScheduledPayments? fun(account: MM.Account): MM.FetchScheduledPaymentsResponse|MM.ErrorMessage|nil Fetch scheduled/standing payments for an account other than a portfolio. Manual and automatic refreshes call it after `RefreshAccount`, but only if the account is new, the last fetch is at least 7 days old, or a `scheduledDate` has passed. Explicitly refreshing scheduled payments always calls it, after `InitializeSession2` (session type `"refresh"`) but without `RefreshAccount`. Cannot return a 2FA challenge. `nil` keeps the stored payments; without this callback, MoneyMoney clears them on every refresh.
 ---@field SubmitPayment? fun(step: integer, account: MM.Account, payment: MM.Payment, tanMethod?: MM.TanMethod, credentials?: MM.Credentials): MM.SubmitPaymentResult Submit a payment; supports multi-step 2FA flows. Must return table or error string.
 
 -- ── MM.ExporterExtension ──────────────────────────────────────────────────────

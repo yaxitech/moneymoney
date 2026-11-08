@@ -428,6 +428,26 @@ function YAXI.RefreshAccount(account, since, isKnownTransactionId, step, credent
   end)
 end
 
+function YAXI.FetchScheduledPayments(account)
+  logCall("FetchScheduledPayments", "account", account)
+  return protected(function()
+    assert(session, "No active session")
+    local iban = assert(account.iban, "Account has no IBAN")
+
+    -- Returning `nil` keeps the scheduled payments MoneyMoney already knows
+    if not session.connection.standingOrders or not session.credentials.connectionData then
+      return nil
+    end
+
+    local obResponse = service.callStandingOrders(session, iban, account.currency)
+    if not obResponse then
+      return nil
+    end
+    session:storeResponse(obResponse)
+    return result.buildScheduledPaymentsResponse(session:resultData())
+  end)
+end
+
 function YAXI.GetTanMethods(account)
   logCall("GetTanMethods", "account", account)
   return protected(function()
@@ -527,12 +547,13 @@ function YAXI.EndSession()
   local name = session and session.connection.service or "unknown"
   local stats = service.getUsageStats()
   log:info(
-    "%s usage this month so far: %d total (accounts=%d, balances=%d, transactions=%d, transfer=%d)",
+    "%s usage this month so far: %d total (accounts=%d, balances=%d, transactions=%d, standingOrders=%d, transfer=%d)",
     name,
     stats.total,
     stats.accounts,
     stats.balances,
     stats.transactions,
+    stats.standingOrders,
     stats.transfer
   )
 end
@@ -545,6 +566,7 @@ SupportsBank = YAXI.SupportsBank
 InitializeSession2 = YAXI.InitializeSession2
 ListAccounts = YAXI.ListAccounts
 RefreshAccount = YAXI.RefreshAccount
+FetchScheduledPayments = YAXI.FetchScheduledPayments
 GetTanMethods = YAXI.GetTanMethods
 MapAccount = YAXI.MapAccount
 SubmitPayment = YAXI.SubmitPayment

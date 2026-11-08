@@ -10,6 +10,7 @@ local AccountField = rc.AccountField
 local Confirmation = rc.Confirmation
 local Selection = rc.Selection
 local Field = rc.Field
+local InterruptError = rc.InterruptError
 
 local enum = require("yaxi.enum")
 local http = require("routex-client.http")
@@ -42,7 +43,7 @@ local function recordCall(serviceName)
 end
 
 ---Get usage stats for the current month from `LocalStorage`.
----@return { accounts: integer, balances: integer, transactions: integer, transfer: integer, total: integer }
+---@return { accounts: integer, balances: integer, transactions: integer, standingOrders: integer, transfer: integer, total: integer }
 function M.getUsageStats()
   ---@type table<string, table<string, integer>>
   local usage = LocalStorage[StorageKey.Usage] --[[@as table?]] or {}
@@ -51,6 +52,7 @@ function M.getUsageStats()
     Service.Accounts,
     Service.Balances,
     Service.Transactions,
+    Service.StandingOrders,
     Service.Transfer,
   }
 
@@ -58,6 +60,7 @@ function M.getUsageStats()
     accounts = 0,
     balances = 0,
     transactions = 0,
+    standingOrders = 0,
     transfer = 0,
     total = 0,
   }
@@ -278,6 +281,38 @@ function M.callTransactions(session, iban, currency, since)
       session = session:routexSession(),
     })
   end)
+end
+
+---Call the `StandingOrders` service.
+---MoneyMoney cannot show challenges while fetching standing orders, so the
+---standing orders are skipped if the service raises `InterruptError`.
+---@param session YAXI.MoneyMoney.Session
+---@param iban string
+---@param currency string?
+---@return YAXI.RoutexClient.OBResponse? obResponse `nil` if the bank requires an interactive step
+function M.callStandingOrders(session, iban, currency)
+  local ticket = session.ticketGenerator:standingOrders(MM.uuid(), {
+    account = {
+      iban = iban,
+      currency = currency,
+    },
+  })
+  prepareCall(session, Service.StandingOrders, ticket, session.client)
+  log:debug("Calling standing orders service for %s", iban)
+
+  local ok, res = pcall(session.client.standingOrders, session.client, {
+    credentials = session.credentials,
+    ticket = ticket,
+    session = session:routexSession(),
+  })
+  if ok then
+    return res
+  end
+  if type(res) == "table" and res.isInstanceOf and res:isInstanceOf(InterruptError) then
+    log:info("Skipping standing orders for %s: the bank requires an interactive step", iban)
+    return nil
+  end
+  error(res, 0)
 end
 
 ---Call the `Transfer` service.

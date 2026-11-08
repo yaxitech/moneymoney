@@ -154,6 +154,34 @@ context("Extension e2e — YAXI Demo #online", function()
       verifyRefreshAccount(accounts[1])
     end)
 
+    test("FetchScheduledPayments returns the standing orders", function()
+      ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
+      local result = FetchScheduledPayments(buildRefreshAccountParam(accounts[1]))
+
+      assert.is_table(result)
+      ---@cast result MM.FetchScheduledPaymentsResponse
+      local payments = result.payments
+
+      -- The demo may add standing orders; only check known ones.
+      ---@param name string
+      ---@return MM.ScheduledPayment
+      local function find(name)
+        for _, payment in ipairs(payments) do
+          if payment.name == name then
+            return payment
+          end
+        end
+        error("missing standing order: " .. name)
+      end
+
+      local rent = find("Stefanie Müller-Schmitt")
+      local broadcasting = find("Rundfunk ARD, ZDF, DRadio")
+      assert.are_equal(1000, rent.amount)
+      assert.are_same({ "M", 1, 1 }, { rent.standingOrderUnit, rent.standingOrderPeriod, rent.standingOrderDay })
+      assert.are_equal(55.08, broadcasting.amount)
+      assert.are_same({ "M", 3 }, { broadcasting.standingOrderUnit, broadcasting.standingOrderPeriod })
+    end)
+
     test("EndSession persists connection data", function()
       verifyEndSession()
     end)

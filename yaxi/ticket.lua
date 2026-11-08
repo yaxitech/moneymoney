@@ -35,7 +35,7 @@ end
 
 ---Issue a new YAXI service ticket (JWT signed with the API key secret).
 ---@param ticketId string UUIDv4 string representation
----@param service "Accounts"|"CollectPayment"|"Balances"|"Transactions"|"Transfer"|string YAXI service name
+---@param service "Accounts"|"CollectPayment"|"Balances"|"Transactions"|"StandingOrders"|"Transfer"|string YAXI service name
 ---@param data table? Additional data specific to `service`
 ---@param exp integer? Expiration as POSIX timestamp (default: now + 5 min)
 ---@return string Signed YAXI ticket JWT
@@ -112,6 +112,22 @@ function Generator:transactions(ticketId, data, exp)
 end
 
 --#endregion Issue Transactions ticket
+
+--#region Issue StandingOrders ticket
+
+---@class YAXI.MoneyMoney.Ticket.Payload.StandingOrders
+---@field account YAXI.MoneyMoney.Ticket.Payload.Transactions.Account Account to gather standing orders for
+
+---Issue a ticket for the `StandingOrders` service.
+---@param ticketId string UUIDv4 string representation
+---@param data YAXI.MoneyMoney.Ticket.Payload.StandingOrders
+---@param exp integer? Expiration as POSIX timestamp (default: now + 5 min)
+---@return string Signed YAXI ticket JWT
+function Generator:standingOrders(ticketId, data, exp)
+  return self:issue(ticketId, "StandingOrders", data, exp)
+end
+
+--#endregion Issue StandingOrders ticket
 
 --#region Issue CollectPayment ticket
 

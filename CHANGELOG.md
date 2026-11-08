@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Standing orders
+
 ### Security
 
 - Reject attestation reports whose guest policy allows migration to another host.

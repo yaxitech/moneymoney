@@ -8,12 +8,15 @@ local fixtures = require("tests.fixtures")
 
 local accountMapping = require("yaxi.mapping.account")
 local balanceMapping = require("yaxi.mapping.balance")
+local standingOrderMapping = require("yaxi.mapping.standing_order")
 local transactionMapping = require("yaxi.mapping.transaction")
 
 local TX_VISA_CARD = fixtures.TX_VISA_CARD
 local TX_SALARY = fixtures.TX_SALARY
 local TX_DIRECT_DEBIT = fixtures.TX_DIRECT_DEBIT
 local TX_STANDING_ORDER = fixtures.TX_STANDING_ORDER
+local SO_RENT = fixtures.SO_RENT
+local SO_BROADCASTING = fixtures.SO_BROADCASTING
 
 -- ---------------------------------------------------------------------------
 -- Balance mapping
@@ -327,6 +330,165 @@ context("yaxi.mapping.transaction", function()
       ---@diagnostic disable-next-line: need-check-nil
       assert.are_equal("2025-07-20", os.date("!%Y-%m-%d", pending.bookingDate))
     end)
+  end)
+end)
+
+-- ---------------------------------------------------------------------------
+-- Standing order mapping
+-- ---------------------------------------------------------------------------
+context("yaxi.mapping.standing_order", function()
+  local TODAY = "2026-10-05"
+
+  ---@param standingOrder table
+  ---@param today string?
+  ---@return MM.ScheduledPayment
+  local function map(standingOrder, today)
+    standingOrder.amount = standingOrder.amount or { amount = "10", currency = "EUR" }
+    local result = standingOrderMapping.mapStandingOrder(standingOrder --[[@as any]], today or TODAY)
+    ---@cast result -nil
+    return result
+  end
+
+  ---@param timestamp integer?
+  ---@return string?
+  local function date(timestamp)
+    return timestamp and os.date("!%Y-%m-%d", timestamp) --[[@as string]]
+  end
+
+  test("maps a monthly standing order", function()
+    local result = map(SO_RENT)
+    assert.are_equal(PaymentTypeStandingOrder, result.type)
+    assert.is_string(result.orderId)
+    assert.are_equal("Stefanie Müller-Schmitt", result.name)
+    assert.are_equal("DE89370400440532013000", result.accountNumber)
+    assert.are_equal(1000, result.amount)
+    assert.are_equal("EUR", result.currency)
+    assert.are_equal("Miete inkl. Betriebskosten, Flurstr. 4, Wohnungsnr. 5, Nürnberg", result.purpose)
+    assert.are_equal("RINP", result.purposeCode)
+    assert.are_equal("2023-02-01", date(result.standingOrderStart))
+    assert.is_nil(result.standingOrderEnd)
+    assert.are_same({ "M", 1, 1 }, { result.standingOrderUnit, result.standingOrderPeriod, result.standingOrderDay })
+    assert.are_equal("2026-11-01", date(result.scheduledDate))
+  end)
+
+  ---@param standingOrders table[]
+  ---@return string[]
+  local function orderIds(standingOrders)
+    local ids = {}
+    for _, payment in ipairs(standingOrderMapping.mapStandingOrders(standingOrders, TODAY)) do
+      table.insert(ids, payment.orderId)
+    end
+    return ids
+  end
+
+  ---@param fields table
+  ---@return table
+  local function rent(fields)
+    local so = {
+      startDate = "2023-02-01",
+      frequency = { months = 1 },
+      amount = { amount = "1000", currency = "EUR" },
+      creditor = { name = "Stefanie Müller-Schmitt", iban = "DE89370400440532013000" },
+      remittanceInformation = { "Miete" },
+    }
+    for k, v in pairs(fields) do
+      so[k] = v
+    end
+    return so
+  end
+
+  test("keeps the order ID when the amount or purpose changes", function()
+    local id = orderIds({ rent({}) })[1]
+    assert.are_equal(id, orderIds({ rent({ amount = { amount = "1050", currency = "EUR" } }) })[1])
+    assert.are_equal(id, orderIds({ rent({ remittanceInformation = { "Miete 2027" } }) })[1])
+    assert.are_not_equal(id, orderIds({ rent({ startDate = "2024-02-01" }) })[1])
+    assert.are_not_equal(id, orderIds({ rent({ creditor = { iban = "DE02120300000000202051" } }) })[1])
+  end)
+
+  test("keeps order IDs unique for orders with the same start and creditor", function()
+    local garage = rent({ amount = { amount = "80", currency = "EUR" } })
+    local ids = orderIds({ rent({}), garage, rent({}) })
+    assert.are_equal(3, #ids)
+    assert.are_not_equal(ids[1], ids[2])
+    assert.are_not_equal(ids[1], ids[3])
+    assert.are_not_equal(ids[2], ids[3])
+    -- An order without a twin keeps its own ID
+    assert.are_equal(orderIds({ rent({}) })[1], orderIds({ rent({}), rent({ startDate = "2024-02-01" }) })[1])
+  end)
+
+  test("encodes the execution day", function()
+    ---@param fields table
+    ---@return integer?
+    local function day(fields)
+      return map(rent(fields)).standingOrderDay
+    end
+    assert.are_equal(15, day({ day = 15 }))
+    -- 31 means the month's last day
+    assert.are_equal(99, day({ day = 31 }))
+    -- Without a day, the start date's day; for weekly orders its weekday
+    assert.are_equal(1, day({}))
+    assert.are_equal(99, day({ startDate = "2026-01-31" }))
+    assert.are_equal(1, day({ startDate = "2026-01-05", frequency = { days = 7 } }))
+    assert.are_equal(7, day({ startDate = "2026-01-11", frequency = { days = 14 } }))
+    assert.is_nil(day({ startDate = "2026-01-05", frequency = { days = 10 } }))
+  end)
+
+  test("maps evenly spaced months to a monthly period", function()
+    local result = map(SO_BROADCASTING)
+    assert.are_same({ "M", 3 }, { result.standingOrderUnit, result.standingOrderPeriod })
+    assert.are_equal("2027-01-01", date(result.scheduledDate))
+  end)
+
+  test("omits recurrences MoneyMoney cannot express", function()
+    ---@param frequency table
+    local function recurrence(frequency)
+      local result = map({ startDate = "2026-01-05", frequency = frequency })
+      return { result.standingOrderUnit, result.standingOrderPeriod }
+    end
+    assert.are_same({ "W", 2 }, recurrence({ days = 14 }))
+    assert.are_same({}, recurrence({ days = 10 }))
+    assert.are_same({}, recurrence({ months = 0 }))
+    assert.are_same({}, recurrence({ variableMonths = { 1, 2, 6 } }))
+  end)
+
+  test("maps a standing order without a start date", function()
+    ---@param fields table
+    ---@param today string
+    ---@return string?
+    local function scheduled(fields, today)
+      return date(map(fields, today).scheduledDate)
+    end
+    local monthly = map({ frequency = { months = 1 }, day = 15 }, "2026-10-20")
+    assert.is_string(monthly.orderId)
+    assert.is_nil(monthly.standingOrderStart)
+    assert.are_equal("2026-11-15", date(monthly.scheduledDate))
+    assert.are_equal("2026-11-01", scheduled({ frequency = { months = 1 }, day = 1 }, "2026-11-01"))
+    assert.are_equal("2026-02-28", scheduled({ frequency = { months = 1 }, day = 31 }, "2026-02-10"))
+    assert.are_equal("2026-01-05", scheduled({ frequency = { months = 1 }, day = 5 }, "2025-12-20"))
+    assert.is_nil(scheduled({ endDate = "2026-10-31", frequency = { months = 1 }, day = 1 }, "2026-10-20"))
+    -- Without a start, only monthly orders on a fixed day have a known next execution
+    assert.is_nil(scheduled({ frequency = { months = 3 }, day = 1 }, "2026-10-20"))
+    assert.is_nil(scheduled({ frequency = { days = 7 } }, "2026-10-20"))
+    assert.is_nil(scheduled({ frequency = { months = 1 } }, "2026-10-20"))
+  end)
+
+  test("computes the next execution", function()
+    -- Clamped to the month's last day
+    local monthEnd = map({ startDate = "2026-01-31", frequency = { months = 1 }, day = 31 }, "2026-02-10")
+    assert.are_equal("2026-02-28", date(monthEnd.scheduledDate))
+    -- Execution on the day itself still counts
+    local weekly = map({ startDate = "2026-01-05", frequency = { days = 14 } }, "2026-02-02")
+    assert.are_equal("2026-02-02", date(weekly.scheduledDate))
+    local upcoming = map({ startDate = "2026-12-01", frequency = { months = 1 }, day = 1 })
+    assert.are_equal("2026-12-01", date(upcoming.scheduledDate))
+    -- The last execution lies before the next one
+    local lastBefore = map({ startDate = "2025-01-01", endDate = TODAY, frequency = { months = 1 }, day = 1 })
+    assert.is_nil(lastBefore.scheduledDate)
+  end)
+
+  test("skips standing orders that have ended", function()
+    local ended = { startDate = "2025-01-01", endDate = "2026-09-01", amount = { amount = "10", currency = "EUR" } }
+    assert.is_nil(standingOrderMapping.mapStandingOrder(ended, TODAY))
   end)
 end)
 

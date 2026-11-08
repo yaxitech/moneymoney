@@ -100,7 +100,7 @@ end
 ---Safely parse a `YYYY-MM-DD` date string, returning `nil` on failure.
 ---@param yyyymmdd string?
 ---@return integer?
-local function safeDateToTimestamp(yyyymmdd)
+function M.safeDateToTimestamp(yyyymmdd)
   if not yyyymmdd then
     return nil
   end
@@ -139,9 +139,9 @@ function M.mapTransaction(tx, connection)
 
   -- Pending transactions often carry only a value date; "now" would shift
   -- on every refresh
-  local bookingDate = safeDateToTimestamp(tx.bookingDate)
-    or safeDateToTimestamp(tx.transactionDate)
-    or safeDateToTimestamp(tx.valueDate)
+  local bookingDate = M.safeDateToTimestamp(tx.bookingDate)
+    or M.safeDateToTimestamp(tx.transactionDate)
+    or M.safeDateToTimestamp(tx.valueDate)
     or os.time()
 
   -- Select counterparty: creditor for debits, debtor for credits
@@ -173,7 +173,7 @@ function M.mapTransaction(tx, connection)
     amount = amount,
     currency = tx.amount and tx.amount.currency,
     bookingDate = bookingDate,
-    valueDate = safeDateToTimestamp(tx.valueDate),
+    valueDate = M.safeDateToTimestamp(tx.valueDate),
     booked = SETTLED_STATUS[tx.status] or false,
     name = party and party.name,
     accountNumber = party and party.iban,

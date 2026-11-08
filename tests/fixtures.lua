@@ -77,4 +77,28 @@ M.TX_STANDING_ORDER = {
   },
 }
 
+---Monthly rent standing order (demo's first standing order)
+M.SO_RENT = {
+  startDate = "2023-02-01",
+  frequency = { months = 1 },
+  day = 1,
+  executionRule = "Following",
+  amount = { amount = "1000", currency = "EUR" },
+  creditor = { name = "Stefanie Müller-Schmitt", iban = "DE89370400440532013000" },
+  remittanceInformation = { "Miete inkl. Betriebskosten, Flurstr. 4, Wohnungsnr. 5, Nürnberg" },
+  purposeCode = "RINP",
+}
+
+---Broadcasting fee due in January, April, July, and October (demo's second standing order)
+M.SO_BROADCASTING = {
+  startDate = "2023-04-01",
+  frequency = { variableMonths = { 1, 4, 7, 10 } },
+  day = 1,
+  executionRule = "Following",
+  amount = { amount = "55.08", currency = "EUR" },
+  creditor = { name = "Rundfunk ARD, ZDF, DRadio", iban = "DE28700500000002024100" },
+  remittanceInformation = { "RF90X333235778" },
+  purposeCode = "RINP",
+}
+
 return M

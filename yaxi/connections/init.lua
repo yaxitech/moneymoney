@@ -30,6 +30,7 @@ local VopMode = enum.VopMode
 ---@field transactionCodePreference string[]? Preferred `bankTransactionCode` type (e.g. `"other"`, `"iso"`)
 ---@field appToApp string? If set, `Redirect` challenges show a QR code instead of the in-app WebView, allowing the user to scan and open in their banking app
 ---@field vop YAXI.MoneyMoney.VopMode? VoP mode. Default: `VopMode.None`.
+---@field standingOrders boolean? Whether to fetch standing orders. Default: `true`.
 ---@field mapChallenge (fun(self: YAXI.MoneyMoney.Connection, challenge: MM.SessionChallenge, obResponse: YAXI.RoutexClient.OBResponse): MM.SessionChallenge)? Override to customize challenge display
 ---@field mapAccount (fun(self: YAXI.MoneyMoney.Connection, yaxiAccount: YAXI.RoutexClient.Result.Account): MM.Account)? Override to customize account mapping
 
@@ -58,6 +59,7 @@ function Connection:new(config)
   obj.transactionCodePreference = config.transactionCodePreference
   obj.appToApp = config.appToApp
   obj.vop = config.vop or VopMode.None
+  obj.standingOrders = config.standingOrders ~= false
   -- Instance callbacks shadow class methods when provided
   obj.mapChallenge = config.mapChallenge
   obj.mapAccount = config.mapAccount
