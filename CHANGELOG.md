@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Reject attestation reports whose guest policy allows migration to another host.
+- Key settlement uses hybrid X25519 + ML-KEM-768 (FIPS 203) post-quantum key exchange.
+
 ## [0.4] - 2026-10-02
 
 ### Added
