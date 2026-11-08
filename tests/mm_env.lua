@@ -78,8 +78,24 @@ MM = {
       bytes[16]
     )
   end,
+  language = "en",
   localizeText = function(s)
     return s
+  end,
+  ---Ignores the format and currency; always two decimals.
+  ---@param _format string
+  ---@param amount number|string
+  ---@param _currency string?
+  ---@return string
+  localizeAmount = function(_format, amount, _currency)
+    return string.format("%.2f", tonumber(amount))
+  end,
+  ---Ignores the format; up to six decimals.
+  ---@param _format string
+  ---@param num number
+  ---@return string
+  localizeNumber = function(_format, num)
+    return (string.format("%.6f", num):gsub("0+$", ""):gsub("%.$", ""))
   end,
   printStatus = function() end,
   ---@param _seconds number
@@ -152,16 +168,68 @@ JSON = function(json)
   return obj
 end
 
+-- Excerpts of the code tables behind `TransactionCode` and `PurposeCode`
+local ISO_CODES = {
+  CCRD = "customer card transactions",
+  ESCT = "SEPA credit transfer",
+  ICDT = "issued credit transfers",
+  IRCT = "issued real-time credit transfers",
+  OTHR = "other",
+  PMNT = "payments",
+  POSD = "point-of-sale payment debit card",
+  RCDT = "received credit transfers",
+  STDO = "standing order",
+}
+local SWIFT_CODES = { DDT = "Direct debit", MSC = "Miscellaneous", STO = "Standing order", TRF = "Transfer" }
+local GVC_CODES = {
+  [105] = "Lastschrift",
+  [106] = "Abwicklung von Kartenzahlungen",
+  [117] = "Dauerauftrag",
+  [153] = "Lohn/Gehalt/Rente",
+  [166] = "Überweisung",
+}
+local PURPOSE_CODES = {
+  CDDP = "card deferred payment",
+  DCRD = "debit card payment",
+  OTHR = "other",
+  RINP = "rent",
+  SALA = "salary payment",
+}
+
+---Resolves only these formats; anything else yields an empty name:
+---`"SUBF"`, `"FAMI-SUBF"`, and `"DOMN-FAMI-SUBF"` (ISO, most specific level first),
+---`"NDDT"` (SWIFT), and `"NDDT+105"` (GVC, then SWIFT).
 ---@param code string
 ---@return MM.TransactionCodeResult
 TransactionCode = function(code)
-  return { name = code }
+  local n, at = #code, function(i)
+    return code:sub(i, i)
+  end
+  local swiftPrefix = at(1) == "N" or at(1) == "F"
+  local function gvcOrSwift()
+    local gvc = code:sub(6, 8)
+    return gvc:match("^%d%d%d$") and GVC_CODES[tonumber(gvc)] or SWIFT_CODES[code:sub(2, 4)]
+  end
+
+  local name
+  if n == 14 and at(5) == "-" and at(10) == "-" then
+    name = ISO_CODES[code:sub(11, 14)] or ISO_CODES[code:sub(6, 9)] or ISO_CODES[code:sub(1, 4)]
+  elseif n >= 9 and swiftPrefix and at(5) == "+" and at(9) == "+" then
+    name = gvcOrSwift()
+  elseif n == 4 then
+    name = ISO_CODES[code] or (swiftPrefix and SWIFT_CODES[code:sub(2, 4)] or nil)
+  elseif n == 9 and at(5) == "-" then
+    name = ISO_CODES[code:sub(6, 9)] or ISO_CODES[code:sub(1, 4)]
+  elseif n == 8 and swiftPrefix and at(5) == "+" then
+    name = gvcOrSwift()
+  end
+  return { name = name or "" }
 end
 
 ---@param code string
 ---@return MM.PurposeCodeResult
 PurposeCode = function(code)
-  return { name = code }
+  return { name = #code == 4 and PURPOSE_CODES[code] or "" }
 end
 
 ---@param _params MM.WebBankingParams

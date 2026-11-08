@@ -38,10 +38,9 @@ end
 local function mockSession()
   local transactionMapping = require("yaxi.mapping.transaction")
   local connection = {
-    transactionCodePreference = nil,
     paymentTypes = { PaymentTypeTransfer },
-    mapTransaction = function(self, tx)
-      return transactionMapping.mapTransaction(tx, self)
+    mapTransaction = function(_self, tx)
+      return transactionMapping.mapTransaction(tx)
     end,
   }
 

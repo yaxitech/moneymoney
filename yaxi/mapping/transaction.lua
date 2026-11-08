@@ -33,48 +33,144 @@ local function dateToTimestamp(yyyymmdd)
   return noon - 12 * 3600 + math.floor(offset)
 end
 
----Extract a booking text from `bankTransactionCodes` using `TransactionCode()`.
+---German business transaction code (Geschäftsvorfallcode) as an integer.
+---@param code YAXI.RoutexClient.Result.Transaction.BankTransactionCodes
+---@return integer?
+local function germanCode(code)
+  local gvc = code.national and code.national.country == "DE" and math.tointeger(tonumber(code.national.code))
+  return gvc and gvc >= 0 and gvc <= 999 and gvc or nil
+end
+
+-- Placeholders that fall back to the enclosing ISO level
+local ISO_PLACEHOLDERS = { OTHR = true, NTAV = true }
+
+---Name the transaction type with `TransactionCode()`, which resolves
+---`DOMN-FAMI-SUBF` (ISO), `NDDT` (SWIFT), and `NDDT+105` (GVC, then SWIFT).
+---The German business transaction code goes first: banks derive the ISO and
+---SWIFT codes from it, and these mappings are sometimes wrong.
 ---@param bankTransactionCodes YAXI.RoutexClient.Result.Transaction.BankTransactionCodes[]?
----@param preferences string[]?
 ---@return string?
-local function extractTransactionCode(bankTransactionCodes, preferences)
-  local res = nil
-
+local function transactionType(bankTransactionCodes)
+  local keys = { gvc = {}, iso = {}, swift = {}, other = {} }
   for _, code in ipairs(bankTransactionCodes or {}) do
-    local param, codeType
-    if code.iso then
-      param = code.iso.subFamily or code.iso.family or code.iso.domain
-      codeType = "iso"
+    local gvc = germanCode(code)
+    if gvc then
+      -- `XXX` is no SWIFT code, so the lookup stops at the GVC
+      table.insert(keys.gvc, string.format("NXXX+%03d", gvc))
+    elseif code.iso then
+      local levels = {}
+      for _, level in ipairs({ code.iso.domain, code.iso.family, code.iso.subFamily }) do
+        table.insert(levels, (not level or ISO_PLACEHOLDERS[level]) and "XXXX" or level)
+      end
+      table.insert(keys.iso, table.concat(levels, "-"))
     elseif code.swift then
-      param = code.swift
-      codeType = "swift"
-    elseif code.bai then
-      param = code.bai
-      codeType = "bai"
-    elseif code.national and code.national.code then
-      param = code.national.code
-      codeType = "national"
-    elseif code.other and code.other.code then
-      param = code.other.code
-      codeType = "other"
-    end
-
-    local mmCode = param and TransactionCode(param) or nil ---@type MM.TransactionCodeResult?
-    local codeName = mmCode and mmCode.name or nil ---@type string?
-    if codeName ~= nil then
-      -- Check if this code type is preferred
-      for _, pref in ipairs(preferences or {}) do
-        if pref == codeType then
-          return codeName
-        end
-      end
-      if not res then
-        res = codeName
-      end
+      table.insert(keys.swift, #code.swift == 3 and "N" .. code.swift or code.swift)
+    elseif code.other then
+      table.insert(keys.other, code.other.code)
     end
   end
 
-  return res
+  for _, group in ipairs({ keys.gvc, keys.iso, keys.swift, keys.other }) do
+    for _, key in ipairs(group) do
+      local ok, result = pcall(TransactionCode, key)
+      local name = ok and result and notEmpty(result.name)
+      if name then
+        return name
+      end
+    end
+  end
+  return nil
+end
+
+---First `other` bank code that reads like text instead of a code: codes
+---consist of uppercase ASCII letters, digits, and separators.
+---@param bankTransactionCodes YAXI.RoutexClient.Result.Transaction.BankTransactionCodes[]?
+---@return string?
+local function plainTextCode(bankTransactionCodes)
+  for _, code in ipairs(bankTransactionCodes or {}) do
+    local text = code.other and code.other.code
+    if text and text:find("%a") and text:find("[%l%s\128-\255]") then
+      return text
+    end
+  end
+  return nil
+end
+
+---Look up the purpose code's name, skipping the uninformative `OTHR`.
+---@param purposeCode string?
+---@return string?
+local function purposeCodeName(purposeCode)
+  if not purposeCode or purposeCode == "OTHR" then
+    return nil
+  end
+  local ok, result = pcall(PurposeCode, purposeCode)
+  return ok and result and notEmpty(result.name) or nil
+end
+
+---End-to-end reference without placeholders like `NOTPROVIDED`.
+---@param endToEndId string?
+---@return string?
+function M.endToEndReference(endToEndId)
+  if endToEndId and endToEndId:upper():match("^%s*NOT[ _]?PROVIDED%s*$") then
+    return nil
+  end
+  return notEmpty(endToEndId)
+end
+
+---@type table<string, { originalAmount: string, exchangeRate: string, fee: string }>
+local CURRENCY_LABELS = {
+  de = { originalAmount = "Originalbetrag", exchangeRate = "Wechselkurs", fee = "Gebühr" },
+  en = { originalAmount = "Original amount", exchangeRate = "Exchange rate", fee = "Fee" },
+}
+
+---@param value number
+---@param currency string
+---@return string
+local function formatAmount(value, currency)
+  return MM.localizeAmount("#,##0.00", math.abs(value)) .. " " .. currency
+end
+
+---Describe the original amount, exchange rates, and fees, one line each.
+---@param tx YAXI.RoutexClient.Result.Transaction
+---@param amount number Billed amount
+---@return string[]
+local function currencyDetails(tx, amount)
+  local labels = CURRENCY_LABELS[MM.language] or CURRENCY_LABELS.en
+  local lines = {} ---@type string[]
+
+  local original = tx.originalAmount
+  local originalValue = original and tonumber(original.amount)
+  if
+    original
+    and originalValue
+    and (original.currency ~= tx.amount.currency or math.abs(originalValue) ~= math.abs(amount))
+  then
+    table.insert(lines, labels.originalAmount .. ": " .. formatAmount(originalValue, original.currency))
+  end
+
+  for _, exchange in ipairs(tx.exchanges or {}) do
+    local rate = tonumber(exchange.exchangeRate)
+    if rate then
+      -- "1 <unit> = <rate> <quoted>"
+      local unit = exchange.unitCurrency or exchange.sourceCurrency
+      local quoted = unit == exchange.sourceCurrency and (exchange.targetCurrency or tx.amount.currency)
+        or exchange.sourceCurrency
+      local text = MM.localizeNumber("#,##0.######", rate)
+      if quoted ~= unit then
+        text = string.format("1 %s = %s %s", unit, text, quoted)
+      end
+      table.insert(lines, labels.exchangeRate .. ": " .. text)
+    end
+  end
+
+  for _, fee in ipairs(tx.fees or {}) do
+    local value = fee.amount and tonumber(fee.amount.amount)
+    if value then
+      table.insert(lines, labels.fee .. ": " .. formatAmount(value, fee.amount.currency))
+    end
+  end
+
+  return lines
 end
 
 ---Extract the German business transaction code (Geschäftsvorfallcode) and
@@ -86,10 +182,7 @@ local function extractNativeCodes(bankTransactionCodes)
   ---@type integer?, string?
   local transactionCode, bookingKey
   for _, code in ipairs(bankTransactionCodes or {}) do
-    if not transactionCode and code.national and code.national.country == "DE" then
-      local gvc = tonumber(code.national.code)
-      transactionCode = gvc and math.tointeger(gvc)
-    end
+    transactionCode = transactionCode or germanCode(code)
     if not bookingKey and code.swift then
       bookingKey = code.swift
     end
@@ -123,9 +216,8 @@ local SETTLED_STATUS = {
 ---Returns `nil` for transactions that cannot be mapped (e.g. missing amount)
 ---or that must not be reported (canceled).
 ---@param tx YAXI.RoutexClient.Result.Transaction
----@param connection YAXI.MoneyMoney.Connection
 ---@return MM.Transaction?
-function M.mapTransaction(tx, connection)
+function M.mapTransaction(tx)
   local amount = tx.amount and tx.amount.amount and tonumber(tx.amount.amount)
   if not amount then
     log:warn("Skipping transaction without parseable amount (id=%s)", tx.transactionId or tx.endToEndId or "?")
@@ -142,36 +234,35 @@ function M.mapTransaction(tx, connection)
   local bookingDate = M.safeDateToTimestamp(tx.bookingDate)
     or M.safeDateToTimestamp(tx.transactionDate)
     or M.safeDateToTimestamp(tx.valueDate)
-    or os.time()
+    or dateToTimestamp(os.date("%Y-%m-%d") --[[@as string]])
 
-  -- Select counterparty: creditor for debits, debtor for credits
-  ---@type YAXI.RoutexClient.Result.Transaction.Party?
-  local party = amount < 0 and tx.creditor or tx.debtor
+  -- Creditor for debits, debtor for credits; a reversal keeps the parties of
+  -- the original transaction
+  local outgoing = amount < 0
+  if tx.reversal then
+    outgoing = not outgoing
+  end
+  local party = outgoing and tx.creditor or tx.debtor
 
-  local purpose = notEmpty(tx.remittanceInformation and table.concat(tx.remittanceInformation, "\n") or nil)
-
-  local purposeCodeName = nil ---@type string?
-  if tx.purposeCode then
-    local ok, resolved = pcall(PurposeCode, tx.purposeCode)
-    if ok and resolved then
-      purposeCodeName = notEmpty((resolved --[[@as MM.PurposeCodeResult]]).name)
-    end
+  local purposeLines = {} ---@type string[]
+  for _, line in ipairs(tx.remittanceInformation or {}) do
+    table.insert(purposeLines, line)
+  end
+  for _, line in ipairs(currencyDetails(tx, amount)) do
+    table.insert(purposeLines, line)
   end
 
-  local bookingText = extractTransactionCode(tx.bankTransactionCodes, connection.transactionCodePreference)
-  if not bookingText then
-    bookingText = purposeCodeName
-  end
-  if not bookingText then
-    bookingText = notEmpty(tx.additionalInformation)
-  end
-
+  local bookingText = transactionType(tx.bankTransactionCodes)
+    or purposeCodeName(tx.purposeCode)
+    or notEmpty(tx.additionalInformation)
+    or plainTextCode(tx.bankTransactionCodes)
   local transactionCode, bookingKey = extractNativeCodes(tx.bankTransactionCodes)
 
   ---@type MM.Transaction
   local transaction = {
     amount = amount,
     currency = tx.amount and tx.amount.currency,
+    timezone = "UTC",
     bookingDate = bookingDate,
     valueDate = M.safeDateToTimestamp(tx.valueDate),
     booked = SETTLED_STATUS[tx.status] or false,
@@ -179,12 +270,12 @@ function M.mapTransaction(tx, connection)
     accountNumber = party and party.iban,
     bankCode = party and party.bic,
     ultimateName = party and party.ultimate,
-    purpose = purpose or purposeCodeName,
+    purpose = notEmpty(table.concat(purposeLines, "\n")),
     purposeCode = tx.purposeCode,
     bookingText = bookingText,
     transactionCode = transactionCode,
     bookingKey = bookingKey,
-    endToEndReference = tx.endToEndId,
+    endToEndReference = M.endToEndReference(tx.endToEndId),
     mandateReference = tx.mandateId,
     creditorId = tx.creditorId,
     -- Deduplication key; never `endToEndId`, which is often "NOTPROVIDED"

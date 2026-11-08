@@ -27,12 +27,12 @@ local VopMode = enum.VopMode
 ---@field since integer? Earliest transaction date as POSIX timestamp
 ---@field paymentTypes MM.PaymentTypeConst[]?
 ---@field tanMethods MM.TanMethod[]? Static TAN methods for `GetTanMethods`
----@field transactionCodePreference string[]? Preferred `bankTransactionCode` type (e.g. `"other"`, `"iso"`)
 ---@field appToApp string? If set, `Redirect` challenges show a QR code instead of the in-app WebView, allowing the user to scan and open in their banking app
 ---@field vop YAXI.MoneyMoney.VopMode? VoP mode. Default: `VopMode.None`.
 ---@field standingOrders boolean? Whether to fetch standing orders. Default: `true`.
 ---@field mapChallenge (fun(self: YAXI.MoneyMoney.Connection, challenge: MM.SessionChallenge, obResponse: YAXI.RoutexClient.OBResponse): MM.SessionChallenge)? Override to customize challenge display
 ---@field mapAccount (fun(self: YAXI.MoneyMoney.Connection, yaxiAccount: YAXI.RoutexClient.Result.Account): MM.Account)? Override to customize account mapping
+---@field mapTransaction (fun(self: YAXI.MoneyMoney.Connection, tx: YAXI.RoutexClient.Result.Transaction): MM.Transaction?)? Override to customize transaction mapping
 
 ---@class YAXI.MoneyMoney.Connection : YAXI.MoneyMoney.Connection.Config
 ---@field paymentTypes MM.PaymentTypeConst[]
@@ -56,13 +56,13 @@ function Connection:new(config)
   obj.since = config.since
   obj.paymentTypes = config.paymentTypes or {}
   obj.tanMethods = config.tanMethods or {}
-  obj.transactionCodePreference = config.transactionCodePreference
   obj.appToApp = config.appToApp
   obj.vop = config.vop or VopMode.None
   obj.standingOrders = config.standingOrders ~= false
   -- Instance callbacks shadow class methods when provided
   obj.mapChallenge = config.mapChallenge
   obj.mapAccount = config.mapAccount
+  obj.mapTransaction = config.mapTransaction
   return obj
 end
 
@@ -106,11 +106,12 @@ end
 
 ---Map a YAXI transaction to an `MM.Transaction`.
 ---Returns `nil` if the transaction cannot be mapped.
+---Connections can override this via the `mapTransaction` config callback.
 ---@param tx YAXI.RoutexClient.Result.Transaction
 ---@return MM.Transaction?
-function Connection:mapTransaction(tx)
+function Connection.mapTransaction(_self, tx)
   local transactionMapping = require("yaxi.mapping.transaction")
-  return transactionMapping.mapTransaction(tx, self)
+  return transactionMapping.mapTransaction(tx)
 end
 
 ---Auto-select a TAN method from a `Selection` dialog during payment flow.

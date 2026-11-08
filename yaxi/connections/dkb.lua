@@ -3,6 +3,7 @@
 
 -- DKB connection.
 
+local transactionMapping = require("yaxi.mapping.transaction")
 local util = require("yaxi.util")
 
 ---@type YAXI.MoneyMoney.Connection.Config
@@ -45,7 +46,16 @@ return {
       hbciMethod = "910",
     },
   },
-  transactionCodePreference = { "other" },
+
+  mapTransaction = function(_self, tx)
+    local transaction = transactionMapping.mapTransaction(tx)
+    -- Card merchants come as e.g. `Lekkerland.REWE.To.Go/Nuernberg`
+    local name = transaction and transaction.name
+    if transaction and name and name:find("/", 1, true) and not name:find(" ", 1, true) then
+      transaction.name = (name:gsub("%.", " "))
+    end
+    return transaction
+  end,
 
   ---Rename DKB TAN methods from `"Name | Medium"` format and assign `hbciMethod`s.
   mapChallenge = function(_self, challenge, _obResponse)

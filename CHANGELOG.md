@@ -5,10 +5,22 @@
 ### Added
 
 - Standing orders
+- Foreign currency transactions show the original amount, exchange rates, and fees in the purpose.
+- Plain-text transaction codes from the bank serve as the transaction type when nothing else is available.
+
+### Changed
+
+- DKB card payments show merchant names with spaces instead of dots, e.g., `Lekkerland REWE To Go/Nuernberg`.
 
 ### Fixed
 
 - An invalid `logLevel` in `yaxi-config.json` falls back to `INFO` instead of breaking the extension.
+- The transaction type prefers the German business transaction code (Geschäftsvorfallcode) over the ISO and SWIFT codes banks derive from it, which can be wrong.
+  Transaction types from SWIFT and German business transaction codes now show at all; previously, only ISO codes did.
+- Transaction and standing order dates no longer show one day early in time zones behind UTC, e.g., in the Americas.
+- Returned direct debits and other reversals show the counterparty instead of the account holder.
+- Placeholder end-to-end references such as `NOTPROVIDED` are no longer shown.
+- The purpose no longer repeats the description of the purpose code.
 
 ### Security
 

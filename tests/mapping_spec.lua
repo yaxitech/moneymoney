@@ -18,6 +18,30 @@ local TX_STANDING_ORDER = fixtures.TX_STANDING_ORDER
 local SO_RENT = fixtures.SO_RENT
 local SO_BROADCASTING = fixtures.SO_BROADCASTING
 
+---Calendar days shown for a date across all time zones (UTC-12 to UTC+14).
+---Without `timezone`, the day follows the user's time zone.
+---@param timestamp integer?
+---@param timezone string?
+---@return string[]
+local function shownDays(timestamp, timezone)
+  if not timestamp then
+    return {}
+  end
+  if timezone == "UTC" or timezone == "GMT" then
+    return {
+      os.date("!%Y-%m-%d", timestamp) --[[@as string]],
+    }
+  end
+  local days = {}
+  for _, offset in ipairs({ -12, 14 }) do
+    local day = os.date("!%Y-%m-%d", timestamp + offset * 3600) --[[@as string]]
+    if days[#days] ~= day then
+      table.insert(days, day)
+    end
+  end
+  return days
+end
+
 -- ---------------------------------------------------------------------------
 -- Balance mapping
 -- ---------------------------------------------------------------------------
@@ -202,11 +226,19 @@ end)
 -- Transaction mapping
 -- ---------------------------------------------------------------------------
 context("yaxi.mapping.transaction", function()
-  local connection = { transactionCodePreference = nil } ---@type any
+  ---@param tx table
+  ---@return MM.Transaction
+  local function map(tx)
+    tx.amount = tx.amount or { amount = "-10.00", currency = "EUR" }
+    tx.status = tx.status or "Booked"
+    local result = transactionMapping.mapTransaction(tx --[[@as YAXI.RoutexClient.Result.Transaction]])
+    ---@cast result -nil
+    return result
+  end
 
   context("mapTransaction", function()
     test("maps a direct debit with mandate and creditor ID", function()
-      local result = transactionMapping.mapTransaction(TX_DIRECT_DEBIT, connection)
+      local result = transactionMapping.mapTransaction(TX_DIRECT_DEBIT)
       assert.is_not_nil(result)
       ---@cast result -nil
       assert.are_equal(-5.99, result.amount)
@@ -225,7 +257,7 @@ context("yaxi.mapping.transaction", function()
     end)
 
     test("uses debtor as counterparty for credit (salary)", function()
-      local result = transactionMapping.mapTransaction(TX_SALARY, connection)
+      local result = transactionMapping.mapTransaction(TX_SALARY)
       assert.is_not_nil(result)
       ---@cast result -nil
       assert.are_equal(3656.58, result.amount)
@@ -236,7 +268,7 @@ context("yaxi.mapping.transaction", function()
     end)
 
     test("maps standing order with Unicode characters", function()
-      local result = transactionMapping.mapTransaction(TX_STANDING_ORDER, connection)
+      local result = transactionMapping.mapTransaction(TX_STANDING_ORDER)
       assert.is_not_nil(result)
       ---@cast result -nil
       assert.are_equal(-1000, result.amount)
@@ -248,26 +280,127 @@ context("yaxi.mapping.transaction", function()
       assert.are_equal("STO", result.bookingKey)
     end)
 
-    test("extracts bookingText from bankTransactionCodes", function()
-      -- Our mock TransactionCode returns { name = code }, so swift "STO" → bookingText "STO"
-      local result = transactionMapping.mapTransaction(TX_STANDING_ORDER, connection)
-      assert.is_not_nil(result)
-      ---@cast result -nil
-      -- iso subFamily "STDO" is tried first and wins
-      assert.are_equal("STDO", result.bookingText)
+    test("prefers the German business transaction code for the booking text", function()
+      -- The ISO and SWIFT codes in these fixtures contradict the GVC
+      assert.are_equal("Lastschrift", map(TX_DIRECT_DEBIT).bookingText)
+      assert.are_equal("Abwicklung von Kartenzahlungen", map(TX_VISA_CARD).bookingText)
+      assert.are_equal("Lohn/Gehalt/Rente", map(TX_SALARY).bookingText)
     end)
 
-    test("prefers transaction code type from connection preference", function()
-      local conn = { transactionCodePreference = { "swift" } } ---@type any
-      local result = transactionMapping.mapTransaction(TX_VISA_CARD, conn)
-      assert.is_not_nil(result)
-      ---@cast result -nil
-      assert.are_equal("DDT", result.bookingText)
+    test("falls back to ISO, SWIFT, other, and purpose codes for the booking text", function()
+      ---@param codes table[]
+      ---@param purposeCode string?
+      ---@return string?
+      local function bookingText(codes, purposeCode)
+        return map({ bankTransactionCodes = codes, purposeCode = purposeCode }).bookingText
+      end
+      local cardIso = { iso = { domain = "PMNT", family = "CCRD", subFamily = "POSD" } }
+      assert.are_equal("point-of-sale payment debit card", bookingText({ { swift = "DDT" }, cardIso }))
+      -- A placeholder subfamily falls back to the family
+      local otherIso = { iso = { domain = "PMNT", family = "RCDT", subFamily = "OTHR" } }
+      assert.are_equal("received credit transfers", bookingText({ otherIso }))
+      assert.are_equal("Direct debit", bookingText({ { swift = "DDT" }, { other = { code = "Kartenzahlung" } } }))
+      assert.are_equal("Überweisung", bookingText({ { other = { code = "NTRF+166" } } }))
+      -- Codes for other countries are no GVC
+      local foreign = { national = { code = "105", country = "AT" } }
+      assert.are_equal("salary payment", bookingText({ foreign }, "SALA"))
+      assert.is_nil(bookingText({}, "OTHR"))
+    end)
+
+    test("uses plain-text bank codes as the last resort for the booking text", function()
+      ---@param code string
+      ---@param fields table?
+      ---@return string?
+      local function bookingText(code, fields)
+        local tx = fields or {}
+        tx.bankTransactionCodes = { { other = { code = code } } }
+        return map(tx).bookingText
+      end
+      assert.are_equal("EURO-Überweisung", bookingText("EURO-Überweisung"))
+      assert.are_equal("SEPA-ÜBERWEISUNG", bookingText("SEPA-ÜBERWEISUNG"))
+      assert.are_equal("Gutschrift Echtzeit", bookingText("Gutschrift Echtzeit"))
+      assert.are_equal("next instalment", bookingText("Kartenzahlung", { additionalInformation = "next instalment" }))
+      assert.are_equal("salary payment", bookingText("Kartenzahlung", { purposeCode = "SALA" }))
+      -- Codes, not texts
+      assert.is_nil(bookingText("4101000"))
+      assert.is_nil(bookingText("NXYZ+999+9310"))
+      assert.is_nil(bookingText("NXYZ"))
+      assert.is_nil(bookingText("07/0085"))
+    end)
+
+    test("keeps the dates in every time zone", function()
+      local result = map({ bookingDate = "2025-07-15", valueDate = "2025-07-16" })
+      assert.are_same({ "2025-07-15" }, shownDays(result.bookingDate, result.timezone))
+      assert.are_same({ "2025-07-16" }, shownDays(result.valueDate, result.timezone))
+    end)
+
+    test("picks the counterparty of the original transaction for reversals", function()
+      -- Returned direct debit: the parties are those of the debit
+      local returned = map({
+        amount = { amount = "5.99", currency = "EUR" },
+        reversal = true,
+        creditor = { name = "PayPal Europe", iban = "LU89751000135104200E" },
+        debtor = { name = "Peter Steiger", iban = fixtures.DEMO_IBAN },
+      })
+      assert.are_equal("PayPal Europe", returned.name)
+      assert.are_equal("LU89751000135104200E", returned.accountNumber)
+
+      local reversedCredit = map({
+        amount = { amount = "-3656.58", currency = "EUR" },
+        reversal = true,
+        creditor = { name = "Peter Steiger", iban = fixtures.DEMO_IBAN },
+        debtor = { name = "DATEV eG" },
+      })
+      assert.are_equal("DATEV eG", reversedCredit.name)
+    end)
+
+    test("drops placeholder end-to-end references", function()
+      assert.is_nil(map({ endToEndId = "NOTPROVIDED" }).endToEndReference)
+      assert.is_nil(map({ endToEndId = "NOT PROVIDED " }).endToEndReference)
+      assert.are_equal("E2E-1", map({ endToEndId = "E2E-1" }).endToEndReference)
+    end)
+
+    test("does not repeat the purpose code in the purpose", function()
+      local result = map({ purposeCode = "SALA" })
+      assert.are_equal("salary payment", result.bookingText)
+      assert.is_nil(result.purpose)
+    end)
+
+    test("adds the original amount, exchange rates, and fees to the purpose", function()
+      local tx = {
+        amount = { amount = "-11.38", currency = "EUR" },
+        remittanceInformation = { "AMAZON.COM" },
+        originalAmount = { amount = "-12.34", currency = "USD" },
+        exchanges = {
+          { sourceCurrency = "USD", targetCurrency = "EUR", unitCurrency = "USD", exchangeRate = "0.9221" },
+        },
+        fees = { { amount = { amount = "0.20", currency = "EUR" } } },
+      }
+      assert.are_equal(
+        "AMAZON.COM\nOriginal amount: 12.34 USD\nExchange rate: 1 USD = 0.9221 EUR\nFee: 0.20 EUR",
+        map(tx).purpose
+      )
+
+      MM.language = "de"
+      local ok, result = pcall(map, { originalAmount = { amount = "12.34", currency = "USD" } })
+      MM.language = "en"
+      assert.is_true(ok)
+      assert.are_equal("Originalbetrag: 12.34 USD", result.purpose)
+
+      -- The rate's unit currency decides the direction
+      local quoted = map({
+        exchanges = {
+          { sourceCurrency = "USD", targetCurrency = "EUR", unitCurrency = "EUR", exchangeRate = "1.0845" },
+        },
+      })
+      assert.are_equal("Exchange rate: 1 EUR = 1.0845 USD", quoted.purpose)
+      -- An original amount equal to the billed amount adds nothing
+      assert.is_nil(map({ originalAmount = { amount = "-10.00", currency = "EUR" } }).purpose)
     end)
 
     test("returns nil when amount is missing", function()
       local tx = { transactionId = "tx-no-amount" } ---@type any
-      local result = transactionMapping.mapTransaction(tx, connection)
+      local result = transactionMapping.mapTransaction(tx)
       assert.is_nil(result)
     end)
 
@@ -279,7 +412,7 @@ context("yaxi.mapping.transaction", function()
           amount = { amount = "10.00", currency = "EUR" },
           status = status,
           bookingDate = "2025-07-01",
-        } --[[@as any]], connection)
+        } --[[@as any]])
       end
       ---@diagnostic disable-next-line: need-check-nil
       assert.are_equal(false, mapWithStatus("Pending").booked)
@@ -299,7 +432,7 @@ context("yaxi.mapping.transaction", function()
         status = "Booked",
         transactionDate = "2025-07-15",
       }
-      local result = transactionMapping.mapTransaction(tx, connection)
+      local result = transactionMapping.mapTransaction(tx)
       assert.is_not_nil(result)
       ---@cast result -nil
       -- Verify the date roundtrips correctly through UTC conversion
@@ -310,10 +443,30 @@ context("yaxi.mapping.transaction", function()
         amount = { amount = "20.00", currency = "EUR" },
         status = "Pending",
         valueDate = "2025-07-20",
-      }, connection)
+      })
       ---@diagnostic disable-next-line: need-check-nil
       assert.are_equal("2025-07-20", os.date("!%Y-%m-%d", pending.bookingDate))
     end)
+  end)
+end)
+
+context("yaxi.connections.dkb", function()
+  local dkb = require("yaxi.connections").registry["YAXI DKB"]
+
+  test("replaces dots in card merchant names", function()
+    ---@param name string
+    ---@return string?
+    local function mappedName(name)
+      local result = dkb:mapTransaction({
+        status = "Booked",
+        amount = { amount = "-1.94", currency = "EUR" },
+        creditor = { name = name },
+      })
+      return result and result.name
+    end
+    assert.are_equal("Lekkerland REWE To Go/Nuernberg", mappedName("Lekkerland.REWE.To.Go/Nuernberg"))
+    assert.are_equal("Dr. Peter Steiger", mappedName("Dr. Peter Steiger"))
+    assert.are_equal("example.com", mappedName("example.com"))
   end)
 end)
 
@@ -473,6 +626,17 @@ context("yaxi.mapping.standing_order", function()
   test("skips standing orders that have ended", function()
     local ended = { startDate = "2025-01-01", endDate = "2026-09-01", amount = { amount = "10", currency = "EUR" } }
     assert.is_nil(standingOrderMapping.mapStandingOrder(ended, TODAY))
+  end)
+
+  test("keeps the dates in every time zone", function()
+    local result = map({ startDate = "2026-01-05", endDate = "2027-01-04", frequency = { days = 14 } })
+    assert.are_same({ "2026-01-05" }, shownDays(result.standingOrderStart, result.timezone))
+    assert.are_same({ "2027-01-04" }, shownDays(result.standingOrderEnd, result.timezone))
+    assert.are_same({ "2026-10-12" }, shownDays(result.scheduledDate, result.timezone))
+  end)
+
+  test("drops placeholder end-to-end references", function()
+    assert.is_nil(map({ startDate = "2026-01-05", endToEndId = "NOTPROVIDED" }).endToEndReference)
   end)
 end)
 
