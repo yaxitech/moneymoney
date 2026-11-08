@@ -14,8 +14,9 @@ context("yaxi.traces", function()
       local extDir = dir .. "/MoneyMoney/Extensions"
       local f = io.open(extDir .. "/YAXI.lua", "w")
       assert.is_truthy(f)
-      f:write("-- test extension") ---@diagnostic disable-line: need-check-nil
-      f:close() ---@diagnostic disable-line: need-check-nil
+      ---@cast f -nil
+      f:write("-- test extension")
+      f:close()
 
       local digest = traces.hashExtensionFile(extDir)
       assert.is_string(digest)
@@ -108,15 +109,15 @@ context("yaxi.traces", function()
     local function readFile(path)
       local f = io.open(path, "r")
       assert.is_truthy(f)
-      local content = f:read("*a") ---@diagnostic disable-line: need-check-nil
-      f:close() ---@diagnostic disable-line: need-check-nil
+      ---@cast f -nil
+      local content = f:read("*a")
+      f:close()
       return content
     end
 
     local origGetId
     before_each(function()
       origGetId = ticketMod.getId
-      ---@diagnostic disable-next-line: duplicate-set-field
       ticketMod.getId = function()
         return "tid"
       end

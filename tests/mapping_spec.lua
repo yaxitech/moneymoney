@@ -26,7 +26,6 @@ context("yaxi.mapping.balance", function()
     local NOW = "2026-07-21T00:00:00Z"
 
     test("returns Booked as primary and Available delta as pending", function()
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "1000.50", currency = "EUR" },
         { balanceType = "Available", amount = "900.00", currency = "EUR" },
@@ -36,7 +35,6 @@ context("yaxi.mapping.balance", function()
     end)
 
     test("returns Available as primary when Booked is missing", function()
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Available", amount = "500.00", currency = "EUR" },
       })
@@ -51,7 +49,6 @@ context("yaxi.mapping.balance", function()
     end)
 
     test("uses Expected as primary when Booked is missing (Expected > Available priority)", function()
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Available", amount = "800.00", currency = "EUR" },
         { balanceType = "Expected", amount = "750.00", currency = "EUR" },
@@ -63,7 +60,6 @@ context("yaxi.mapping.balance", function()
     test("uses Expected as pending fallback when Available has creditLimitIncluded (unicredit/de pattern)", function()
       -- Booked(false) + Available(creditLimit) + Expected(false):
       -- Available must not be used as pending because it is credit-limit-inflated.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "29944.00", currency = "EUR", creditLimitIncluded = false },
         { balanceType = "Available", amount = "234567.89", currency = "EUR", creditLimitIncluded = true },
@@ -75,7 +71,6 @@ context("yaxi.mapping.balance", function()
 
     test("surfaces creditLimitIncluded Available delta as pending (fi/Sparkassen pattern)", function()
       -- Booked(false) + Available(creditLimit): delta includes the credit line.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "800.00", currency = "EUR", creditLimitIncluded = false },
         { balanceType = "Available", amount = "1800.00", currency = "EUR", creditLimitIncluded = true },
@@ -86,7 +81,6 @@ context("yaxi.mapping.balance", function()
 
     test("prefers creditLimitIncluded=false over true within the same type (vwbank pattern)", function()
       -- Two Booked entries — the one without credit limit must win regardless of order.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "8301.93", currency = "EUR", creditLimitIncluded = true },
         { balanceType = "Booked", amount = "7301.93", currency = "EUR", creditLimitIncluded = false },
@@ -99,7 +93,6 @@ context("yaxi.mapping.balance", function()
       -- Available(creditLimit) + Expected(false): Expected must be picked as primary
       -- because it is the only entry without a credit line, even though Available
       -- would normally have higher priority.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Available", amount = "180387.25", currency = "EUR", creditLimitIncluded = true },
         { balanceType = "Expected", amount = "175387.25", currency = "EUR", creditLimitIncluded = false },
@@ -109,7 +102,6 @@ context("yaxi.mapping.balance", function()
     end)
 
     test("falls back to creditLimitIncluded=true for primary when no clean entry exists", function()
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Available", amount = "500.00", currency = "EUR", creditLimitIncluded = true },
       })
@@ -118,7 +110,6 @@ context("yaxi.mapping.balance", function()
     end)
 
     test("computes pending delta when both primary and pending have creditLimitIncluded=true", function()
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "100.00", currency = "EUR", creditLimitIncluded = true },
         { balanceType = "Expected", amount = "140.00", currency = "EUR", creditLimitIncluded = true },
@@ -130,7 +121,6 @@ context("yaxi.mapping.balance", function()
     test("picks the freshest Booked by dateTime (interim over closing)", function()
       -- A prior bookkeeping day's closing balance and a fresher interim one: the later
       -- dateTime wins, regardless of reported order.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "1000.00", currency = "EUR", dateTime = "2026-07-19T23:59:59Z" },
         { balanceType = "Booked", amount = "1200.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
@@ -142,7 +132,6 @@ context("yaxi.mapping.balance", function()
     test("lets a fresher Available outrank an older Booked (recency wins across types)", function()
       -- The freshest entry wins regardless of type; Booked no longer takes priority
       -- over a more recent Available.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "1000.00", currency = "EUR", dateTime = "2026-07-19T00:00:00Z" },
         { balanceType = "Available", amount = "1020.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
@@ -154,7 +143,6 @@ context("yaxi.mapping.balance", function()
     test("prefers Booked over Available on an equal dateTime, with the freshest pending delta", function()
       -- Booked and Available share the newest dateTime, so Booked stays primary; the
       -- fresher of the two Available entries drives the pending delta.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "500.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
         { balanceType = "Available", amount = "480.00", currency = "EUR", dateTime = "2026-07-19T23:00:00Z" },
@@ -167,7 +155,6 @@ context("yaxi.mapping.balance", function()
     test("ignores a dateTime in the future", function()
       -- A balance not yet valid (dateTime > now) is skipped in favor of the freshest
       -- past one.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "1000.00", currency = "EUR", dateTime = "2026-07-22T00:00:00Z" },
         { balanceType = "Booked", amount = "900.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
@@ -179,7 +166,6 @@ context("yaxi.mapping.balance", function()
     test("skips entries without a dateTime for the guideline pick", function()
       -- The guideline considers only dated entries; a Booked without a dateTime loses
       -- to a dated one.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "700.00", currency = "EUR" },
         { balanceType = "Booked", amount = "750.00", currency = "EUR", dateTime = "2026-07-20T08:00:00Z" },
@@ -192,7 +178,6 @@ context("yaxi.mapping.balance", function()
       -- Current-state balances carry the retrieval time; a client clock
       -- running a few seconds behind must not fall back to a stale entry.
       local aheadNow = os.date("!%Y-%m-%dT%H:%M:%S.500000000Z", os.time() + 2)
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Booked", amount = "1000.00", currency = "EUR", dateTime = "2026-01-15T00:00:00.000000000Z" },
         { balanceType = "Available", amount = "8877.78", currency = "EUR", dateTime = aheadNow },
@@ -203,7 +188,6 @@ context("yaxi.mapping.balance", function()
     test("falls back to the type scan when no entry carries a dateTime", function()
       -- Without any dateTime the guideline cannot apply, so the Booked > Available type
       -- priority still selects the primary.
-      ---@diagnostic disable-next-line: missing-fields, param-type-mismatch
       local result = balanceMapping.pickBalance({
         { balanceType = "Available", amount = "900.00", currency = "EUR" },
         { balanceType = "Booked", amount = "1000.00", currency = "EUR" },
@@ -326,7 +310,7 @@ context("yaxi.mapping.transaction", function()
         amount = { amount = "20.00", currency = "EUR" },
         status = "Pending",
         valueDate = "2025-07-20",
-      } --[[@as any]], connection)
+      }, connection)
       ---@diagnostic disable-next-line: need-check-nil
       assert.are_equal("2025-07-20", os.date("!%Y-%m-%d", pending.bookingDate))
     end)
@@ -344,7 +328,7 @@ context("yaxi.mapping.standing_order", function()
   ---@return MM.ScheduledPayment
   local function map(standingOrder, today)
     standingOrder.amount = standingOrder.amount or { amount = "10", currency = "EUR" }
-    local result = standingOrderMapping.mapStandingOrder(standingOrder --[[@as any]], today or TODAY)
+    local result = standingOrderMapping.mapStandingOrder(standingOrder, today or TODAY)
     ---@cast result -nil
     return result
   end
@@ -352,7 +336,7 @@ context("yaxi.mapping.standing_order", function()
   ---@param timestamp integer?
   ---@return string?
   local function date(timestamp)
-    return timestamp and os.date("!%Y-%m-%d", timestamp) --[[@as string]]
+    return timestamp and os.date("!%Y-%m-%d", timestamp)
   end
 
   test("maps a monthly standing order", function()

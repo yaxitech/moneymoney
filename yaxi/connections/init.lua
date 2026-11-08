@@ -16,7 +16,7 @@ local rc = require("routex-client")
 local PaymentProduct = rc.PaymentProduct
 
 local enum = require("yaxi.enum")
-local StorageKey = enum.StorageKey
+local storage = require("yaxi.storage")
 local VopMode = enum.VopMode
 
 ---@class YAXI.MoneyMoney.Connection.Config
@@ -200,10 +200,9 @@ end
 ---Persist discovered TAN method `hbciMethod` codes to `LocalStorage`.
 ---@param hbciMethods string[]
 function Connection:storeDiscoveredTanMethods(hbciMethods)
-  ---@type table<string, string[]>
-  local stored = LocalStorage[StorageKey.TanMethods] --[[@as table<string, string[]>?]] or {}
+  local stored = storage.getTanMethods()
   stored[self.id] = hbciMethods
-  LocalStorage[StorageKey.TanMethods] = stored --[[@as any]]
+  storage.setTanMethods(stored)
   log:debug("Stored %d discovered TAN methods for %s", #hbciMethods, self.service)
 end
 
@@ -212,9 +211,7 @@ end
 ---`Selection` dialog receive an `errorMessage` to signal they are not set up.
 ---@return MM.TanMethod[]
 function Connection:getEffectiveTanMethods()
-  ---@type table<string, string[]>
-  local stored = LocalStorage[StorageKey.TanMethods] --[[@as table<string, string[]>?]] or {}
-  local discovered = stored[self.id]
+  local discovered = storage.getTanMethods()[self.id]
 
   -- No discovery yet — return static list as-is
   if not discovered then

@@ -69,7 +69,7 @@ context("yaxi.errors", function()
 
     test("clears connectionData for UnauthorizedError", function()
       local conn = { id = "test-conn", service = "TestBank" }
-      LocalStorage["test-conn"] = "stale-data" --[[@as any]]
+      LocalStorage["test-conn"] = "stale-data"
       ---@diagnostic disable-next-line: missing-fields
       local session = { connection = conn, activeService = nil, activeTicket = nil } --[[@as YAXI.MoneyMoney.Session]]
 

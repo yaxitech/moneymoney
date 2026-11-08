@@ -34,10 +34,10 @@ local function mockSession(opts)
   sess.sessionType = "refresh"
   sess.interactive = opts.interactive
   ---@diagnostic disable-next-line: missing-fields
-  sess.connection = { id = "mock-conn", service = "MockBank", paymentTypes = {} } --[[@as YAXI.MoneyMoney.Connection]]
+  sess.connection = { id = "mock-conn", service = "MockBank", paymentTypes = {} }
   sess.credentials = {
     connectionId = "mock-conn",
-    connectionData = opts.connectionData --[[@as binary]],
+    connectionData = opts.connectionData,
   }
   ---@diagnostic disable-next-line: missing-fields
   sess.ticketGenerator = {
@@ -49,7 +49,7 @@ local function mockSession(opts)
       tickets = tickets + 1
       return "ticket-transactions-" .. tickets
     end,
-  } --[[@as YAXI.MoneyMoney.Ticket.Generator]]
+  }
   sess.client = (opts.client or {}) --[[@as YAXI.RoutexClient.RoutexClient]]
   sess.refreshClient = (opts.refreshClient or {}) --[[@as YAXI.RoutexRefreshClient]]
   return sess, function()
@@ -261,7 +261,7 @@ context("RoutexRefreshClient integration", function()
         return "trace-path"
       end
 
-      LocalStorage["mock-conn"] = "blob" --[[@as any]]
+      LocalStorage["mock-conn"] = "blob"
       local sess = mockSession({ interactive = false, connectionData = "blob" })
       sess.activeService = enum.Service.Balances
       sess.activeTicket = "ticket"
@@ -283,7 +283,7 @@ context("RoutexRefreshClient integration", function()
         return "trace-path"
       end
 
-      LocalStorage["mock-conn"] = "blob" --[[@as any]]
+      LocalStorage["mock-conn"] = "blob"
       local sess = mockSession({ interactive = false, connectionData = "blob" })
       sess.activeService = enum.Service.Balances
       sess.activeTicket = "ticket"
@@ -324,15 +324,7 @@ context("RoutexRefreshClient integration", function()
         return nil
       end
 
-      InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "", "" } --[[@as MM.Credentials]],
-        interactive,
-        {},
-        sessionType
-      )
+      InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" }, interactive, {}, sessionType)
 
       ---@diagnostic disable-next-line: duplicate-set-field
       Session.new = origNew

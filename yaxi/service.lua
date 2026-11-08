@@ -14,40 +14,37 @@ local InterruptError = rc.InterruptError
 
 local enum = require("yaxi.enum")
 local http = require("routex-client.http")
+local storage = require("yaxi.storage")
 local ticketMod = require("yaxi.ticket")
 local transactionMapping = require("yaxi.mapping.transaction")
 local util = require("yaxi.util")
 
 local Service = enum.Service
-local StorageKey = enum.StorageKey
 
 local M = {}
 
 ---Get the current month key (e.g. `"2026-03"`).
 ---@return string
 local function monthKey()
-  return os.date("!%Y-%m") --[[@as string]]
+  return os.date("!%Y-%m")
 end
 
 ---Record a service call in `LocalStorage`.
 ---@param serviceName YAXI.RoutexClient.Service
 local function recordCall(serviceName)
-  ---@type table<string, table<string, integer>>
-  local usage = LocalStorage[StorageKey.Usage] --[[@as table?]] or {}
+  local usage = storage.getUsage()
   local month = monthKey()
   if not usage[month] then
     usage[month] = {}
   end
   usage[month][serviceName] = (usage[month][serviceName] or 0) + 1
-  LocalStorage[StorageKey.Usage] = usage --[[@as any]]
+  storage.setUsage(usage)
 end
 
 ---Get usage stats for the current month from `LocalStorage`.
 ---@return { accounts: integer, balances: integer, transactions: integer, standingOrders: integer, transfer: integer, total: integer }
 function M.getUsageStats()
-  ---@type table<string, table<string, integer>>
-  local usage = LocalStorage[StorageKey.Usage] --[[@as table?]] or {}
-  local counts = usage[monthKey()] or {}
+  local counts = storage.getUsage()[monthKey()] or {}
   local services = {
     Service.Accounts,
     Service.Balances,

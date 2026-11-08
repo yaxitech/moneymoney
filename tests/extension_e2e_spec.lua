@@ -136,7 +136,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "result", "" } --[[@as MM.Credentials]],
+        { "result", "" },
         true,
         {},
         "new account"
@@ -199,7 +199,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "confirmation", "" } --[[@as MM.Credentials]],
+        { "confirmation", "" },
         true,
         {},
         "new account"
@@ -217,7 +217,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         2,
-        { "", "The required authorization has not been carried out.", true } --[[@as MM.Credentials]],
+        { "", "The required authorization has not been carried out.", true },
         true,
         {},
         "new account"
@@ -246,7 +246,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "selection", "" } --[[@as MM.Credentials]],
+        { "selection", "" },
         true,
         {},
         "new account"
@@ -279,7 +279,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         2,
-        { selectedMethod } --[[@as MM.Credentials]],
+        { selectedMethod },
         true,
         {},
         "new account"
@@ -301,15 +301,7 @@ context("Extension e2e — YAXI Demo #online", function()
     setup(resetState)
 
     test("InitializeSession2 step=1 returns field challenge", function()
-      local challenge = InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "input", "" } --[[@as MM.Credentials]],
-        true,
-        {},
-        "new account"
-      )
+      local challenge = InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "input", "" }, true, {}, "new account")
 
       assert.is_table(challenge)
       ---@cast challenge table
@@ -348,7 +340,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "redirect", "" } --[[@as MM.Credentials]],
+        { "redirect", "" },
         true,
         {},
         "new account"
@@ -411,7 +403,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "random", "" } --[[@as MM.Credentials]],
+        { "random", "" },
         true,
         {},
         "new account"
@@ -443,15 +435,7 @@ context("Extension e2e — YAXI Demo #online", function()
 
   context("Refresh session (result user)", function()
     test("InitializeSession2 for refresh returns nil", function()
-      local challenge = InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "result", "" } --[[@as MM.Credentials]],
-        true,
-        {},
-        "refresh"
-      )
+      local challenge = InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "result", "" }, true, {}, "refresh")
       assert.is_nil(challenge)
     end)
 
@@ -478,7 +462,6 @@ context("Extension e2e — YAXI Demo #online", function()
       end, 1, {})
 
       assert.is_table(result)
-      ---@cast result table
       assert.is_number(result.balance)
       assert.is_table(result.transactions)
     end)
@@ -537,7 +520,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "result", "" } --[[@as MM.Credentials]],
+        { "result", "" },
         true,
         {},
         "new account"
@@ -551,15 +534,7 @@ context("Extension e2e — YAXI Demo #online", function()
     end)
 
     test("InitializeSession2 for payment returns nil", function()
-      local challenge = InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "result", "" } --[[@as MM.Credentials]],
-        true,
-        {},
-        "payment"
-      )
+      local challenge = InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "result", "" }, true, {}, "payment")
       assert.is_nil(challenge)
     end)
 
@@ -567,7 +542,6 @@ context("Extension e2e — YAXI Demo #online", function()
       ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
       local result = SubmitPayment(1, accounts[1], payment, nil, nil)
       assert.is_table(result)
-      ---@cast result table
       assert.are.equal("accepted", result.status)
       assert.is_string(result.orderId)
     end)
@@ -602,7 +576,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "result", "" } --[[@as MM.Credentials]],
+        { "result", "" },
         true,
         {},
         "new account"
@@ -620,7 +594,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "confirmation", "" } --[[@as MM.Credentials]],
+        { "confirmation", "" },
         true,
         {},
         "payment"
@@ -632,7 +606,6 @@ context("Extension e2e — YAXI Demo #online", function()
       ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
       local result = SubmitPayment(1, accounts[1], payment, nil, nil)
       assert.is_table(result)
-      ---@cast result table
       assert.is_truthy(result.poll)
       assert.is_string(result.challenge)
       assert.is_string(result.orderId)
@@ -640,9 +613,8 @@ context("Extension e2e — YAXI Demo #online", function()
 
     test("SubmitPayment step=2 resolves to accepted", function()
       ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
-      local result = SubmitPayment(2, accounts[1], payment, nil, { "", "", true } --[[@as MM.Credentials]])
+      local result = SubmitPayment(2, accounts[1], payment, nil, { "", "", true })
       assert.is_table(result)
-      ---@cast result table
       assert.are.equal("accepted", result.status)
       assert.is_string(result.orderId)
     end)
@@ -677,7 +649,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "result", "" } --[[@as MM.Credentials]],
+        { "result", "" },
         true,
         {},
         "new account"
@@ -691,15 +663,7 @@ context("Extension e2e — YAXI Demo #online", function()
     end)
 
     test("InitializeSession2 for payment (selection user)", function()
-      local challenge = InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "selection", "" } --[[@as MM.Credentials]],
-        true,
-        {},
-        "payment"
-      )
+      local challenge = InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "selection", "" }, true, {}, "payment")
       assert.is_nil(challenge)
     end)
 
@@ -710,7 +674,6 @@ context("Extension e2e — YAXI Demo #online", function()
         hbciMethod = "900",
       }, nil)
       assert.is_table(result)
-      ---@cast result table
       -- Auto-selection should resolve the Selection and return accepted or next interrupt
       assert.is_truthy(result.status == "accepted" or result.poll or result.challenge)
     end)
@@ -745,7 +708,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "result", "" } --[[@as MM.Credentials]],
+        { "result", "" },
         true,
         {},
         "new account"
@@ -759,15 +722,7 @@ context("Extension e2e — YAXI Demo #online", function()
     end)
 
     test("InitializeSession2 for payment (input user)", function()
-      local challenge = InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "input", "" } --[[@as MM.Credentials]],
-        true,
-        {},
-        "payment"
-      )
+      local challenge = InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "input", "" }, true, {}, "payment")
       assert.is_nil(challenge)
     end)
 
@@ -775,15 +730,13 @@ context("Extension e2e — YAXI Demo #online", function()
       ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
       local result = SubmitPayment(1, accounts[1], payment, nil, nil)
       assert.is_table(result)
-      ---@cast result table
       assert.is_truthy(result.challenge)
     end)
 
     test("SubmitPayment step=2 resolves to accepted", function()
       ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
-      local result = SubmitPayment(2, accounts[1], payment, nil, { "123456" } --[[@as MM.Credentials]])
+      local result = SubmitPayment(2, accounts[1], payment, nil, { "123456" })
       assert.is_table(result)
-      ---@cast result table
       assert.are.equal("accepted", result.status)
     end)
 
@@ -817,7 +770,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "result", "" } --[[@as MM.Credentials]],
+        { "result", "" },
         true,
         {},
         "new account"
@@ -831,15 +784,7 @@ context("Extension e2e — YAXI Demo #online", function()
     end)
 
     test("InitializeSession2 for payment (redirect user)", function()
-      local challenge = InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "redirect", "" } --[[@as MM.Credentials]],
-        true,
-        {},
-        "payment"
-      )
+      local challenge = InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "redirect", "" }, true, {}, "payment")
       assert.is_nil(challenge)
     end)
 
@@ -847,7 +792,6 @@ context("Extension e2e — YAXI Demo #online", function()
       ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
       local result = SubmitPayment(1, accounts[1], payment, nil, nil)
       assert.is_table(result)
-      ---@cast result table
       assert.is_string(result.challenge)
       ---@cast result { challenge: string }
       assert.is_truthy(result.challenge:find("https://"))
@@ -855,9 +799,8 @@ context("Extension e2e — YAXI Demo #online", function()
 
     test("SubmitPayment step=2 resolves redirect to accepted", function()
       ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
-      local result = SubmitPayment(2, accounts[1], payment, nil, { "demo-auth-code" } --[[@as MM.Credentials]])
+      local result = SubmitPayment(2, accounts[1], payment, nil, { "demo-auth-code" })
       assert.is_table(result)
-      ---@cast result table
       assert.are.equal("accepted", result.status)
     end)
 
@@ -904,7 +847,7 @@ context("Extension e2e — YAXI Demo #online", function()
         ProtocolWebBanking,
         "YAXI Demo",
         1,
-        { "result", "" } --[[@as MM.Credentials]],
+        { "result", "" },
         true,
         {},
         "new account"
@@ -918,15 +861,7 @@ context("Extension e2e — YAXI Demo #online", function()
     end)
 
     test("InitializeSession2 for payment (random user)", function()
-      local challenge = InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "random", "" } --[[@as MM.Credentials]],
-        true,
-        {},
-        "payment"
-      )
+      local challenge = InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "random", "" }, true, {}, "payment")
       assert.is_nil(challenge)
     end)
 
@@ -940,7 +875,6 @@ context("Extension e2e — YAXI Demo #online", function()
       ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
       local res = SubmitPayment(1, accounts[1], payment, tanMethod, nil)
       assert.is_table(res)
-      ---@cast res table
 
       local step = 2
       while res.status ~= "accepted" do
@@ -948,7 +882,6 @@ context("Extension e2e — YAXI Demo #online", function()
         ---@diagnostic disable-next-line: need-check-nil, param-type-mismatch
         res = SubmitPayment(step, accounts[1], payment, tanMethod, creds)
         assert.is_table(res)
-        ---@cast res table
         step = step + 1
         assert.is_true(step <= 10)
       end
@@ -970,11 +903,7 @@ context("Extension e2e — YAXI Demo #online", function()
 
     setup(function()
       resetState()
-      local handle = io.popen(string.format("rm -f %q/trace_*.age.txt", tmpdir))
-      ---@diagnostic disable-next-line: unnecessary-if
-      if handle then
-        handle:close()
-      end
+      os.execute(string.format("rm -f %q/trace_*.age.txt", tmpdir))
     end)
 
     ---@return string[]
@@ -993,15 +922,7 @@ context("Extension e2e — YAXI Demo #online", function()
 
     test("writes error trace with _error_ tag", function()
       -- Use invalid credentials to trigger an error on the first API call
-      local result = InitializeSession2(
-        ProtocolWebBanking,
-        "YAXI Demo",
-        1,
-        { "", "" } --[[@as MM.Credentials]],
-        true,
-        {},
-        "new account"
-      )
+      local result = InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" }, true, {}, "new account")
       assert.is_string(result)
 
       local traces = listTraces()

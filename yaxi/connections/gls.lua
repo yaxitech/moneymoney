@@ -53,8 +53,7 @@ return {
         end
       end
       for _, tanMethod in ipairs(challenge.tanMethods) do
-        local matched = byKey[tanMethod.webMethod]
-        ---@diagnostic disable-next-line: unnecessary-if
+        local matched = tanMethod.webMethod and byKey[tanMethod.webMethod]
         if matched then
           tanMethod.name = matched.name
           tanMethod.hbciMethod = matched.hbciMethod

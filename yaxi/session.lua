@@ -20,6 +20,7 @@ local UserInSession = refresh.UserInSession
 local TicketGenerator = require("yaxi.ticket").Generator
 local MMHttpClient = require("yaxi.mm.http").MMHttpClient
 local resultMod = require("yaxi.result")
+local storage = require("yaxi.storage")
 
 local YAXI_API_URL = "https://api.yaxi.tech"
 
@@ -79,7 +80,7 @@ function Session:new(connection, apiKeyId, apiKeySecret, version)
   obj.refreshClient:setUserInSession(UserInSession.OnThisConnection)
   obj.ticketGenerator = TicketGenerator:new(apiKeyId, apiKeySecret)
 
-  local connectionData = LocalStorage[connection.id] --[[@as string?]]
+  local connectionData = storage.getConnectionData(connection.id)
   log:debug("Session for %s (connectionData=%s)", connection.service, connectionData and "present" or "absent")
 
   -- Fetch `ConnectionInfo` (free call)
@@ -95,7 +96,7 @@ function Session:new(connection, apiKeyId, apiKeySecret, version)
 
   obj.credentials = {
     connectionId = obj.connectionInfo.id,
-    connectionData = connectionData --[[@as binary]],
+    connectionData = connectionData,
   }
   return obj
 end
@@ -201,13 +202,13 @@ end
 ---Persist `connectionData` to `LocalStorage` and clean up any stale session data.
 function Session:persist()
   if self.credentials.connectionData then
-    LocalStorage[self.connection.id] = self.credentials.connectionData --[[@as any]]
+    storage.setConnectionData(self.connection.id, self.credentials.connectionData)
     log:debug("Persisted connectionData for %s", self.connection.service)
   end
 
   -- Routex sessions are short-lived and must not be persisted across MoneyMoney
   -- sessions. Clear any stale session data that may have been saved by older versions.
-  LocalStorage[self.connection.id .. ":session"] = nil
+  storage.clearSession(self.connection.id)
 end
 
 return Session

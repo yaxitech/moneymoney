@@ -14,6 +14,7 @@ local AccessExceededError = rc.AccessExceededError
 local TicketError = rc.TicketError
 local TicketErrorCode = rc.TicketErrorCode
 
+local storage = require("yaxi.storage")
 local traces = require("yaxi.traces")
 
 local M = {}
@@ -87,7 +88,7 @@ function M.errorHandler(session, err)
     -- Clear stale connection data
     if session then
       log:debug("Clearing connectionData for %s due to %s", session.connection.service, yaxiErr.name)
-      LocalStorage[session.connection.id] = nil
+      storage.setConnectionData(session.connection.id, nil)
     end
     return withTrace(userMessage or yaxiErr.message or "Authorization expired. Please try again.")
   end

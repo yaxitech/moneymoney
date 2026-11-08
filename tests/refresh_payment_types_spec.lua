@@ -34,11 +34,11 @@ local function initWithMockSession()
     sess.sessionType = "refresh"
     sess.connection = conn
     sess.connection.paymentTypes = CONNECTION_PAYMENT_TYPES
-    sess.credentials = { connectionId = "mock" } --[[@as YAXI.RoutexClient.Credentials]]
+    sess.credentials = { connectionId = "mock" }
     sess.balancesCache = { [TEST_IBAN] = { balance = 0 } }
     return sess
   end
-  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" } --[[@as MM.Credentials]], true, {}, "refresh")
+  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" }, true, {}, "refresh")
   ---@diagnostic disable-next-line: duplicate-set-field
   Session.new = origNew
 end
@@ -97,7 +97,7 @@ context("RefreshAccount paymentTypes derivation", function()
     initWithMockSession()
     LocalStorage[StorageKey.AccountsData] = {
       [TEST_IBAN] = { capabilities = { "SinglePayment", "Balances" } },
-    } --[[@as any]]
+    }
     local finish = stubAndCapture()
 
     RefreshAccount(REFRESH_ACCOUNT_PARAM, 0, function()
@@ -113,7 +113,7 @@ context("RefreshAccount paymentTypes derivation", function()
     initWithMockSession()
     LocalStorage[StorageKey.AccountsData] = {
       [TEST_IBAN] = { capabilities = { "Balances", "Transactions" } },
-    } --[[@as any]]
+    }
     local finish = stubAndCapture()
 
     RefreshAccount(REFRESH_ACCOUNT_PARAM, 0, function()

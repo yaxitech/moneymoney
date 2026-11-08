@@ -11,10 +11,10 @@ local Connection = require("yaxi.connections")
 local Session = require("yaxi.session")
 local accountMapping = require("yaxi.mapping.account")
 local enum = require("yaxi.enum")
+local storage = require("yaxi.storage")
 local util = require("yaxi.util")
 
 local Phase = enum.Phase
-local StorageKey = enum.StorageKey
 local VopMode = enum.VopMode
 ---Maximum number of days that `RefreshAccount` may look back beyond the last
 ---successful refresh. If `since` is older than `lastRefresh - LAST_REFRESH_MAX_AGE_DAYS`,
@@ -160,10 +160,9 @@ end
 ---Persist the current time as last-refresh timestamp for the given IBAN.
 ---@param iban string
 local function recordLastRefresh(iban)
-  ---@type table<string, integer>
-  local byIban = LocalStorage[StorageKey.LastRefresh] --[[@as table<string, integer>?]] or {}
+  local byIban = storage.getLastRefresh()
   byIban[iban] = os.time()
-  LocalStorage[StorageKey.LastRefresh] = byIban --[[@as any]]
+  storage.setLastRefresh(byIban)
 end
 
 ---Clamp `since` to prevent overly broad date ranges on recurring refreshes.
@@ -175,8 +174,7 @@ local function clampSince(sess, iban, since)
   if sess.sessionType ~= "refresh" or not since then
     return since
   end
-  local lastRefreshByIban = LocalStorage[StorageKey.LastRefresh] --[[@as table<string, integer>?]] or {}
-  local lastRefresh = lastRefreshByIban[iban] ---@type integer?
+  local lastRefresh = storage.getLastRefresh()[iban] ---@type integer?
   if not lastRefresh then
     return since
   end
@@ -194,7 +192,7 @@ local function clampSince(sess, iban, since)
     LAST_REFRESH_MAX_AGE_DAYS
   )
   MM.printStatus(string.format("Limiting transaction history to %d days.", LAST_REFRESH_MAX_AGE_DAYS))
-  return clamped --[[@as MM.Timestamp]]
+  return clamped
 end
 
 ---Fetch balances for all accounts if not already cached. Returns a challenge on interrupt.
@@ -209,13 +207,12 @@ local function fetchBalances(sess, iban, currency, accountName)
     return nil
   end
   MM.printStatus(string.format("Fetching balances for %s…", accountName or iban))
-  local accountRefs = LocalStorage[StorageKey.Accounts]
-    or {
-      {
-        iban = iban,
-        currency = currency,
-      },
-    }
+  local accountRefs = storage.getAccounts() or {
+    {
+      iban = iban,
+      currency = currency,
+    },
+  }
   local obResponse = service.callBalances(sess, accountRefs)
   if obResponse then
     local challenge = interrupt.mapToChallenge(sess, obResponse)
@@ -348,13 +345,12 @@ function YAXI.ListAccounts(knownAccounts)
     local accounts = {}
     ---@type YAXI.RoutexClient.AccountReference[]
     local accountRefs = {}
-    ---@type table<string, any>
+    ---@type table<string, YAXI.RoutexClient.Result.Account>
     local yaxiAccountsByIban = {}
 
     for _, yaxiAccount in ipairs(yaxiAccounts or {}) do
       local ok, mapped = pcall(session.connection.mapAccount, session.connection, yaxiAccount)
       if ok and mapped then
-        ---@cast mapped MM.Account
         table.insert(accounts, mapped)
         if mapped.iban then
           table.insert(accountRefs, {
@@ -370,8 +366,8 @@ function YAXI.ListAccounts(knownAccounts)
     log:debug("Mapped %d accounts", #accounts)
 
     -- Persist YAXI account data for MapAccount and bulk balance fetching
-    LocalStorage[StorageKey.Accounts] = accountRefs --[[@as any]]
-    LocalStorage[StorageKey.AccountsData] = yaxiAccountsByIban --[[@as any]]
+    storage.setAccounts(accountRefs)
+    storage.setAccountsData(yaxiAccountsByIban)
 
     return accounts
   end)
@@ -397,9 +393,7 @@ function YAXI.RefreshAccount(account, since, isKnownTransactionId, step, credent
     local iban = assert(account.iban, "Account has no IBAN")
     since = clampSince(session, iban, since)
 
-    local yaxiAccountsByIban = LocalStorage[StorageKey.AccountsData] --[[@as table<string, YAXI.RoutexClient.Result.Account>?]]
-      or {}
-    local paymentTypes = accountMapping.derivePaymentTypes(yaxiAccountsByIban[iban], session.connection)
+    local paymentTypes = accountMapping.derivePaymentTypes(storage.getAccountsData()[iban], session.connection)
 
     if step == 1 or not step then
       local challenge = fetchBalances(session, iban, account.currency, account.name)
@@ -527,9 +521,8 @@ function YAXI.MapAccount(account)
     end
 
     -- Re-map from stored YAXI account data if available
-    local yaxiAccountsByIban = LocalStorage[StorageKey.AccountsData] --[[@as table<string, any>?]]
     local iban = account.iban
-    local yaxiAccount = iban and yaxiAccountsByIban and yaxiAccountsByIban[iban]
+    local yaxiAccount = iban and storage.getAccountsData()[iban]
     if yaxiAccount then
       return session.connection:mapAccount(yaxiAccount)
     end

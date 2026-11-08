@@ -94,7 +94,7 @@ function M.pickBalance(balanceEntries, now)
   end
 
   -- Fall back to a type scan, exhausting credit-line-free entries ({ false, true }) first.
-  now = now or os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() + CLOCK_SKEW_TOLERANCE_SECS) --[[@as string]]
+  now = now or os.date("!%Y-%m-%dT%H:%M:%SZ", os.time() + CLOCK_SKEW_TOLERANCE_SECS)
   local primary = pickFreshest(balanceEntries, now)
     or findEntry(balanceEntries, { "Booked", "Expected", "Available" }, { false, true })
   if not primary then

@@ -6,6 +6,10 @@
 
 - Standing orders
 
+### Fixed
+
+- An invalid `logLevel` in `yaxi-config.json` falls back to `INFO` instead of breaking the extension.
+
 ### Security
 
 - Reject attestation reports whose guest policy allows migration to another host.

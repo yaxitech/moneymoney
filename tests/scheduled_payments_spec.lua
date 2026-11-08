@@ -64,7 +64,7 @@ local function initSession(standingOrders, respond)
     }
     return sess
   end
-  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" } --[[@as MM.Credentials]], false, {}, "refresh")
+  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" }, false, {}, "refresh")
   ---@diagnostic disable-next-line: duplicate-set-field
   Session.new = origNew
   return requests

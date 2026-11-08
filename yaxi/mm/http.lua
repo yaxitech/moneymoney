@@ -94,7 +94,7 @@ local RC = RoutexClient --[[@as table]]
 
 ---@diagnostic disable-next-line: unnecessary-if
 if not RC._readOBResponsePatched then
-  local _originalReadOBResponse = RC._readOBResponse --[[@as function]]
+  local _originalReadOBResponse = RC._readOBResponse
   local _handleResponse = RC._handleResponse --[[@as function]]
 
   local jsonDecode = require("routex-client.vendor.json").decode
@@ -146,7 +146,7 @@ local RRC = require("routex-client.refresh").RoutexRefreshClient --[[@as table]]
 
 ---@diagnostic disable-next-line: unnecessary-if
 if not RRC._readResponsePatched then
-  local _originalReadResponse = RRC._readResponse --[[@as function]]
+  local _originalReadResponse = RRC._readResponse
   local _handleResponse = RRC._handleResponse --[[@as function]]
 
   local jsonDecode = require("routex-client.vendor.json").decode

@@ -72,9 +72,9 @@ local function mediaChallengeData(dialog)
     return nil
   end
   if image.mimeType == "image/png" or image.mimeType == "image/jpeg" then
-    return image.data --[[@as string]]
+    return image.data
   end
-  local hhdUc = image.hhdUcData --[[@as string?]]
+  local hhdUc = image.hhdUcData
   if hhdUc then
     -- Plain HHD-UC is printable ASCII; frame anything else as a hex string.
     if hhdUc:find("[^%g%s]") then
@@ -128,7 +128,7 @@ local function buildFieldChallenge(dialog)
     -- Guess a more specific TAN method name from message keywords
     for _, rule in ipairs(TAN_RULES) do
       if matchesRule(msg, rule) then
-        tanMethod.name = rule.name --[[@as MM.TanMethodName]]
+        tanMethod.name = rule.name
         log:debug("Guessed TAN method name: %s", rule.name)
         break
       end

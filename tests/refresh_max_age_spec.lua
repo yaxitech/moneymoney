@@ -27,8 +27,8 @@ local function mockSession(sessionType)
   ---@diagnostic disable-next-line: missing-fields
   sess.connection = {
     paymentTypes = { PaymentTypeTransfer },
-  } --[[@as YAXI.MoneyMoney.Connection]]
-  sess.credentials = { connectionId = "mock" } --[[@as YAXI.RoutexClient.Credentials]]
+  }
+  sess.credentials = { connectionId = "mock" }
   sess.balancesCache = { [TEST_IBAN] = { balance = 42 } }
   sess.transactionsCache = nil
   sess.result = nil
@@ -50,15 +50,15 @@ end
 local function initWithMockSession(sessionType)
   local origNew = Session.new
   local injected
-  ---@diagnostic disable-next-line: duplicate-set-field, redundant-parameter
-  Session.new = function(_cls, conn, _apiKeyId, _apiKeySecret, _version)
+  ---@diagnostic disable-next-line: duplicate-set-field
+  Session.new = function(_cls, conn)
     injected = mockSession(sessionType)
     injected.connection = conn
     injected.connection.paymentTypes = injected.connection.paymentTypes or {}
     injected.balancesCache = { [TEST_IBAN] = { balance = 42 } }
     return injected
   end
-  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" } --[[@as MM.Credentials]], true, {}, sessionType)
+  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" }, true, {}, sessionType)
   ---@diagnostic disable-next-line: duplicate-set-field
   Session.new = origNew
   return injected
@@ -145,7 +145,7 @@ context("last-refresh max-age clamping", function()
 
   test("clamps since when older than lastRefresh - maxAge", function()
     resetState()
-    LocalStorage[StorageKey.LastRefresh] = { [TEST_IBAN] = os.time() } --[[@as any]]
+    LocalStorage[StorageKey.LastRefresh] = { [TEST_IBAN] = os.time() }
 
     initWithMockSession("refresh")
     local finish = stubServiceCalls()
@@ -177,7 +177,7 @@ context("last-refresh max-age clamping", function()
 
   test("does not clamp for new-account sessions", function()
     resetState()
-    LocalStorage[StorageKey.LastRefresh] = { [TEST_IBAN] = os.time() } --[[@as any]]
+    LocalStorage[StorageKey.LastRefresh] = { [TEST_IBAN] = os.time() }
 
     initWithMockSession("new account")
     local finish = stubServiceCalls()
@@ -193,7 +193,7 @@ context("last-refresh max-age clamping", function()
 
   test("does not clamp when since is within maxAge of lastRefresh", function()
     resetState()
-    LocalStorage[StorageKey.LastRefresh] = { [TEST_IBAN] = os.time() } --[[@as any]]
+    LocalStorage[StorageKey.LastRefresh] = { [TEST_IBAN] = os.time() }
 
     initWithMockSession("refresh")
     local finish = stubServiceCalls()

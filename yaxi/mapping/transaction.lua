@@ -26,8 +26,8 @@ local function dateToTimestamp(yyyymmdd)
     day = tonumber(day),
     hour = 12,
   } --[[@as std.osdateparam]])
-  local utc = os.date("!*t", noon) --[[@as std.osdateparam]]
-  local loc = os.date("*t", noon) --[[@as std.osdateparam]]
+  local utc = os.date("!*t", noon)
+  local loc = os.date("*t", noon)
   utc.isdst = loc.isdst
   local offset = os.difftime(os.time(loc), os.time(utc))
   return noon - 12 * 3600 + math.floor(offset)
@@ -106,7 +106,7 @@ function M.safeDateToTimestamp(yyyymmdd)
   end
   local ok, result = pcall(dateToTimestamp, yyyymmdd)
   if ok then
-    return result --[[@as integer]]
+    return result
   end
   return nil
 end

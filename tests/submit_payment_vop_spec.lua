@@ -40,10 +40,10 @@ local function initWithMockPaymentSession(vop)
     sess.sessionType = "payment"
     sess.connection = conn
     sess.connection.vop = vop
-    sess.credentials = { connectionId = "mock" } --[[@as YAXI.RoutexClient.Credentials]]
+    sess.credentials = { connectionId = "mock" }
     return sess
   end
-  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" } --[[@as MM.Credentials]], true, {}, "payment")
+  InitializeSession2(ProtocolWebBanking, "YAXI Demo", 1, { "", "" }, true, {}, "payment")
   ---@diagnostic disable-next-line: duplicate-set-field
   Session.new = origNew
 end
@@ -94,7 +94,7 @@ context("SubmitPayment VoP warning gate", function()
     local finish = stubAndRecordCallTransfer()
 
     SubmitPayment(1, {}, PAYMENT, nil, nil)
-    SubmitPayment(2, {}, PAYMENT, nil, { "", "", true } --[[@as MM.TanCredentials]])
+    SubmitPayment(2, {}, PAYMENT, nil, { "", "", true })
 
     assert.is_true(finish())
   end)

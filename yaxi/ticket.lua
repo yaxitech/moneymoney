@@ -58,7 +58,7 @@ function Generator:issue(ticketId, service, data, exp)
     },
   }
 
-  local ticket = jwt.encode(payload, self._apiKeySecret --[[@as binary]], "HS256", headers, nullValue)
+  local ticket = jwt.encode(payload, self._apiKeySecret, "HS256", headers, nullValue)
 
   return ticket
 end

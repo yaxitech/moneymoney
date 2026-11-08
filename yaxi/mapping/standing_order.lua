@@ -19,18 +19,17 @@ local M = {}
 ---@return MM.StandingOrderUnit? unit
 ---@return integer? period
 local function mapFrequency(frequency)
-  local f = frequency --[[@as { months: number?, days: number?, variableMonths: integer[]? }?]]
-  if not f then
+  if not frequency then
     return nil
   end
-  if f.months and f.months > 0 then
-    return "M", math.tointeger(f.months)
+  if frequency.months and frequency.months > 0 then
+    return "M", math.tointeger(frequency.months)
   end
-  if f.days and f.days > 0 and f.days % 7 == 0 then
-    return "W", math.tointeger(f.days // 7)
+  if frequency.days and frequency.days > 0 and frequency.days % 7 == 0 then
+    return "W", math.tointeger(frequency.days // 7)
   end
   -- Evenly spaced months, e.g., January, April, July, and October: quarterly
-  local months = f.variableMonths
+  local months = frequency.variableMonths
   if months and #months > 0 and 12 % #months == 0 then
     local sorted = table.move(months, 1, #months, 1, {})
     table.sort(sorted)

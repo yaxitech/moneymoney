@@ -39,9 +39,9 @@ do
   local origInfo = RoutexClient.info
   ---@type table<string, any>
   local infoCache = {}
-  RoutexClient.info = function(self, opts) ---@diagnostic disable-line: assign-type-mismatch, redundant-parameter
+  function RoutexClient:info(opts)
     local cached = infoCache[opts.connectionId]
-    if cached then ---@diagnostic disable-line: unnecessary-if
+    if cached then
       return cached
     end
     local result = origInfo(self, opts)
