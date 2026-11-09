@@ -286,6 +286,18 @@ context("yaxi.interrupt", function()
       )
       assert.are_equal("abc123", challenge.state)
     end)
+
+    test("opens ING authorizations in the in-app browser", function()
+      -- ING's login page offers its own QR code login, which keeps the
+      -- redirect in MoneyMoney
+      local session = mockSession()
+      session.connection = Connection.registry["YAXI ING"]
+      local redirect = mockRedirect("https://myaccount.ing.com/authorize/v2/DE?state=abc123")
+      local challenge = interrupt.mapToChallenge(session, redirect)
+      assert.is_not_nil(challenge)
+      ---@cast challenge -nil
+      assert.is_nil(challenge.appToApp)
+    end)
   end)
 
   -- ---------------------------------------------------------------------------

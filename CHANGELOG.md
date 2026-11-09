@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Adding an ING account no longer gets stuck after approving the login in the ING app.
+  MoneyMoney opens ING's login page again, which offers its own QR code login.
+
 ## [0.5] - 2026-11-08
 
 ### Added

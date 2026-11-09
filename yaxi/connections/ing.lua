@@ -35,5 +35,4 @@ return {
       hbciMethod = "702",
     },
   },
-  appToApp = MM.localizeText("Banking to go"),
 }
