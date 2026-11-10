@@ -39,7 +39,7 @@
           }:
           buildNpmPackage {
             pname = "yaxi-moneymoney";
-            version = "0.5";
+            version = "0.6";
             src = lib.fileset.toSource {
               root = ./.;
               fileset = lib.fileset.unions ([
